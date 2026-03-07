@@ -6,31 +6,40 @@ A high-performance FastAPI-based proxy for the [OpenF1 API](https://openf1.org) 
 - **Compressed Caching**: Uses `zlib` compression to minimize Redis memory usage.
 - **Intelligent TTL**: Dynamic cache expiry based on data volatility (e.g., telemetry expires faster than race results).
 - **Heroku Ready**: Includes `Procfile` and `runtime.txt` for immediate deployment.
-- **Rate Limit Resilience**: Reduces the load on OpenF1 by serving cached data to multiple concurrent users.
+- **Dashboard Implementation**: Added a professional Tailwind CSS dashboard at `/` with tabs for Metrics, Cache Inspection, and Seeding Control.
+- **Seeding Functionality**: Introduced a background seeding engine to pre-cache historical F1 data for specified years.
+- **Background Worker**: Added a dedicated worker thread to handle metrics snapshots and automatic data refreshes.
+- **Improved Metrics**: Real-time tracking of total requests, cache efficiency, and API errors with persistent storage in Redis.
+- **Cache Inspector**: Integrated tool to browse and inspect active Redis keys directly from the dashboard.
 
 ---
 
 ## API Endpoints
 
-### 1. Root / Health Check
-Simple endpoint to verify the service is running.
+### 1. Root / Dashboard
+Interactive dashboard and system metrics.
 - **Endpoint:** `GET /`
-- **Sample Response:**
-```json
-{
-  "status": "ok",
-  "service": "F1 Buddy Proxy API",
-  "timestamp": "2026-03-07T03:27:00Z"
-}
-```
+- **Tabs:** Metrics, Cache Inspector, Seeding, API Docs.
 
-### 2. Get Meetings
+### 2. Seeding Control
+Manage historical data pre-caching.
+- **Endpoint:** `POST /seed_history`
+- **Parameters:** `years` (comma-separated, default: "2023,2024")
+- **Endpoint:** `POST /stop_seeding`
+- **Endpoint:** `GET /seed_status`
+
+### 3. Cache Management
+Inspect current cache state.
+- **Endpoint:** `GET /cache_keys`
+- **Endpoint:** `GET /cache_data/{key}`
+
+### 4. Get Meetings
 Returns a list of F1 meetings (Grand Prix events).
 - **Endpoint:** `GET /meetings`
 - **Parameters:** `year` (optional, int)
 - **Caching:** 1 hour.
 
-### 3. Get Sessions
+### 5. Get Sessions
 Returns a list of sessions for a specific meeting.
 - **Endpoint:** `GET /sessions`
 - **Parameters:**
@@ -38,7 +47,7 @@ Returns a list of sessions for a specific meeting.
     - `session_key`: (optional, int) Unique identifier for the session.
 - **Caching:** 30 minutes.
 
-### 4. Dynamic Data (Telemetry, Weather, etc.)
+### 6. Dynamic Data (Telemetry, Weather, etc.)
 Proxies various dynamic data types for a specific session.
 - **Endpoint:** `GET /{data_type}`
 - **Valid `data_type` values:**
