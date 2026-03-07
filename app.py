@@ -146,6 +146,7 @@ async def root(request: Request):
         <div class="flex border-b border-slate-800 mb-8 overflow-x-auto">
             <button onclick="showTab('metrics')" id="tab-metrics" class="px-6 py-3 font-bold text-sm tab-active transition-all whitespace-nowrap">Metrics</button>
             <button onclick="showTab('calendar')" id="tab-calendar" class="px-6 py-3 font-bold text-sm text-slate-500 hover:text-slate-300 transition-all whitespace-nowrap">Race Calendar</button>
+            <button onclick="showTab('session_detail')" id="tab-session_detail" class="px-6 py-3 font-bold text-sm text-slate-500 hover:text-slate-300 transition-all whitespace-nowrap hidden">Session Detail</button>
             <button onclick="showTab('cache')" id="tab-cache" class="px-6 py-3 font-bold text-sm text-slate-500 hover:text-slate-300 transition-all whitespace-nowrap">Cache Inspector</button>
             <button onclick="showTab('seeding')" id="tab-seeding" class="px-6 py-3 font-bold text-sm text-slate-500 hover:text-slate-300 transition-all whitespace-nowrap">Seeding</button>
             <button onclick="showTab('docs')" id="tab-docs" class="px-6 py-3 font-bold text-sm text-slate-500 hover:text-slate-300 transition-all whitespace-nowrap">API Docs</button>
@@ -237,6 +238,90 @@ async def root(request: Request):
                 <div class="col-span-full py-20 text-center text-slate-500 animate-pulse">
                     <i data-lucide="calendar" class="w-12 h-12 mx-auto mb-4 opacity-20"></i>
                     <p>Loading the F1 calendar...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Session Detail Tab -->
+        <div id="content-session_detail" class="tab-content hidden space-y-6">
+            <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center gap-4">
+                    <button onclick="showTab('calendar')" class="p-2 hover:bg-slate-800 rounded-lg transition-all text-slate-400 hover:text-white">
+                        <i data-lucide="arrow-left" class="w-6 h-6"></i>
+                    </button>
+                    <h2 class="text-2xl font-bold tracking-tight" id="session-detail-title">Session Details</h2>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span id="session-detail-key" class="px-3 py-1 bg-slate-900 border border-slate-800 rounded-lg text-xs font-mono text-slate-500">Key: -</span>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Left Column: Summary & Drivers -->
+                <div class="lg:col-span-2 space-y-6">
+                    <div class="bg-slate-900/50 border border-slate-800 rounded-2xl p-6">
+                        <h3 class="text-lg font-bold mb-4 flex items-center gap-2">
+                            <i data-lucide="users" class="text-red-500 w-5 h-5"></i>
+                            Drivers in Session
+                        </h3>
+                        <div id="session-drivers-list" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="col-span-full text-center py-8 text-slate-600 italic">No drivers found.</div>
+                        </div>
+                    </div>
+
+                    <div class="bg-slate-900/50 border border-slate-800 rounded-2xl p-6">
+                        <h3 class="text-lg font-bold mb-4 flex items-center gap-2">
+                            <i data-lucide="flag" class="text-blue-500 w-5 h-5"></i>
+                            Recent Laps
+                        </h3>
+                        <div id="session-laps-summary" class="overflow-x-auto">
+                            <table class="w-full text-left text-sm">
+                                <thead class="text-slate-500 border-b border-slate-800 font-bold uppercase text-[10px] tracking-wider">
+                                    <tr>
+                                        <th class="pb-3 px-2 text-center">Driver</th>
+                                        <th class="pb-3 px-2">Lap</th>
+                                        <th class="pb-3 px-2">Time</th>
+                                        <th class="pb-3 px-2">S1</th>
+                                        <th class="pb-3 px-2">S2</th>
+                                        <th class="pb-3 px-2">S3</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="session-laps-body" class="divide-y divide-slate-800/50 text-slate-300">
+                                    <tr><td colspan="6" class="py-8 text-center text-slate-600 italic">No lap data available.</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Column: Weather & Info -->
+                <div class="space-y-6">
+                    <div class="bg-slate-900/50 border border-slate-800 rounded-2xl p-6">
+                        <h3 class="text-lg font-bold mb-4 flex items-center gap-2">
+                            <i data-lucide="cloud-sun" class="text-emerald-500 w-5 h-5"></i>
+                            Weather Summary
+                        </h3>
+                        <div id="session-weather-info" class="space-y-4">
+                            <div class="text-center py-8 text-slate-600 italic">No weather data.</div>
+                        </div>
+                    </div>
+
+                    <div class="bg-slate-900/50 border border-slate-800 rounded-2xl p-6">
+                        <h3 class="text-lg font-bold mb-4 flex items-center gap-2">
+                            <i data-lucide="info" class="text-amber-500 w-5 h-5"></i>
+                            Session Status
+                        </h3>
+                        <div class="space-y-3 text-sm" id="session-status-info">
+                            <div class="flex justify-between py-2 border-b border-slate-800">
+                                <span class="text-slate-500">Live Telemetry</span>
+                                <span class="text-slate-300 font-mono">Available</span>
+                            </div>
+                            <div class="flex justify-between py-2">
+                                <span class="text-slate-500">Track Position</span>
+                                <span class="text-slate-300 font-mono">Cached</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -483,18 +568,117 @@ async def root(request: Request):
         }
 
         async function viewSessionData(sessionKey) {
-            // Placeholder for deep session data view
-            // For now, let's just show a quick overview in an alert or a future modal
+            // Show session detail tab
+            document.getElementById('tab-session_detail').classList.remove('hidden');
+            showTab('session_detail');
+            
+            // Set initial UI state
+            document.getElementById('session-detail-key').textContent = `Key: ${sessionKey}`;
+            document.getElementById('session-detail-title').textContent = "Loading Session...";
+            document.getElementById('session-drivers-list').innerHTML = '<div class="col-span-full text-center py-20 text-slate-600 animate-pulse text-[10px] font-bold uppercase tracking-widest">Fetching Drivers...</div>';
+            document.getElementById('session-laps-body').innerHTML = '<tr><td colspan="6" class="py-20 text-center text-slate-600 animate-pulse text-[10px] font-bold uppercase tracking-widest">Fetching Lap Data...</td></tr>';
+            document.getElementById('session-weather-info').innerHTML = '<div class="text-center py-20 text-slate-600 animate-pulse text-[10px] font-bold uppercase tracking-widest">Fetching Weather...</div>';
+
             try {
-                const resp = await fetch(`/drivers?session_key=${sessionKey}`);
-                const drivers = await resp.json();
-                
-                let driverList = Array.isArray(drivers) ? drivers.map(d => `${d.broadcast_name} (${d.team_name})`).join('\n') : "No driver data";
-                if (driverList.length > 300) driverList = driverList.substring(0, 300) + "...";
-                
-                alert(`Session Details (Key: ${sessionKey})\n\nDrivers Present:\n${driverList}`);
+                // Fetch basic session info to update title
+                const sResp = await fetch(`/sessions?session_key=${sessionKey}`);
+                const sessionData = await sResp.json();
+                if (sessionData && sessionData.length > 0) {
+                    document.getElementById('session-detail-title').textContent = `${sessionData[0].meeting_name} - ${sessionData[0].session_name}`;
+                }
+
+                // Parallel fetch for details
+                const [dResp, wResp, lResp] = await Promise.all([
+                    fetch(`/drivers?session_key=${sessionKey}`),
+                    fetch(`/weather?session_key=${sessionKey}`),
+                    fetch(`/laps?session_key=${sessionKey}`)
+                ]);
+
+                const [drivers, weather, laps] = await Promise.all([
+                    dResp.json(),
+                    wResp.json(),
+                    lResp.json()
+                ]);
+
+                // Update Drivers
+                if (!drivers || drivers.length === 0) {
+                    document.getElementById('session-drivers-list').innerHTML = '<div class="col-span-full text-center py-8 text-slate-600 italic">No drivers found for this session.</div>';
+                } else {
+                    let dHtml = '';
+                    drivers.sort((a,b) => a.driver_number - b.driver_number).forEach(d => {
+                        const teamColor = d.team_colour ? `#${d.team_colour}` : '#334155';
+                        dHtml += `
+                            <div class="flex items-center gap-4 p-3 bg-slate-950 border border-slate-800 rounded-xl">
+                                <div class="w-1.5 h-10 rounded-full" style="background-color: ${teamColor}"></div>
+                                <div class="flex-shrink-0 w-8 text-lg font-black text-slate-600">${d.driver_number}</div>
+                                <div class="flex-1">
+                                    <div class="text-sm font-bold text-slate-200">${d.broadcast_name}</div>
+                                    <div class="text-[10px] text-slate-500 font-bold uppercase">${d.team_name}</div>
+                                </div>
+                                <div class="text-xs font-mono text-slate-600">${d.name_acronym}</div>
+                            </div>
+                        `;
+                    });
+                    document.getElementById('session-drivers-list').innerHTML = dHtml;
+                }
+
+                // Update Weather (take the latest reading)
+                if (!weather || weather.length === 0) {
+                    document.getElementById('session-weather-info').innerHTML = '<div class="text-center py-8 text-slate-600 italic">No weather data recorded.</div>';
+                } else {
+                    const latest = weather[weather.length - 1];
+                    document.getElementById('session-weather-info').innerHTML = `
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 text-center">
+                                <div class="text-[10px] text-slate-500 uppercase font-bold mb-1">Air Temp</div>
+                                <div class="text-xl font-bold text-white">${latest.air_temperature}°C</div>
+                            </div>
+                            <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 text-center">
+                                <div class="text-[10px] text-slate-500 uppercase font-bold mb-1">Track Temp</div>
+                                <div class="text-xl font-bold text-white">${latest.track_temperature}°C</div>
+                            </div>
+                            <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 text-center">
+                                <div class="text-[10px] text-slate-500 uppercase font-bold mb-1">Humidity</div>
+                                <div class="text-xl font-bold text-white">${latest.humidity}%</div>
+                            </div>
+                            <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 text-center">
+                                <div class="text-[10px] text-slate-500 uppercase font-bold mb-1">Rain</div>
+                                <div class="text-xl font-bold ${latest.rainfall ? 'text-blue-400' : 'text-slate-500'}">${latest.rainfall ? 'Yes' : 'No'}</div>
+                            </div>
+                        </div>
+                        <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 flex justify-between items-center">
+                             <div class="text-[10px] text-slate-500 uppercase font-bold">Wind Speed</div>
+                             <div class="text-sm font-bold text-white">${latest.wind_speed} m/s</div>
+                        </div>
+                    `;
+                }
+
+                // Update Laps (show top 20 latest laps)
+                if (!laps || laps.length === 0) {
+                    document.getElementById('session-laps-body').innerHTML = '<tr><td colspan="6" class="py-8 text-center text-slate-600 italic">No lap data found.</td></tr>';
+                } else {
+                    laps.sort((a,b) => b.lap_number - a.lap_number);
+                    let lHtml = '';
+                    laps.slice(0, 20).forEach(l => {
+                        const timeStr = l.lap_duration ? l.lap_duration.toFixed(3) : '-';
+                        lHtml += `
+                            <tr class="hover:bg-slate-800/20 transition-all">
+                                <td class="py-3 px-2 text-center font-bold text-slate-500">${l.driver_number}</td>
+                                <td class="py-3 px-2 font-mono text-xs">${l.lap_number}</td>
+                                <td class="py-3 px-2 font-bold text-white">${timeStr}</td>
+                                <td class="py-3 px-2 text-xs text-slate-500">${l.duration_sector_1 ? l.duration_sector_1.toFixed(2) : '-'}</td>
+                                <td class="py-3 px-2 text-xs text-slate-500">${l.duration_sector_2 ? l.duration_sector_2.toFixed(2) : '-'}</td>
+                                <td class="py-3 px-2 text-xs text-slate-500">${l.duration_sector_3 ? l.duration_sector_3.toFixed(2) : '-'}</td>
+                            </tr>
+                        `;
+                    });
+                    document.getElementById('session-laps-body').innerHTML = lHtml;
+                }
+
+                lucide.createIcons();
             } catch (e) {
-                alert(`Session: ${sessionKey}\nError fetching driver list: ${e.message}`);
+                console.error("Error loading session detail:", e);
+                document.getElementById('session-detail-title').textContent = "Error Loading Session";
             }
         }
 
