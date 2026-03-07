@@ -1380,7 +1380,7 @@ def seed_historical_f1_data(years=[2023, 2024]):
                 continue
             
             meetings = resp.json()
-            set_cached_data(f"f1_meetings_{year}", meetings, ttl=86400) # 24h for seed
+            set_cached_data(f"f1_meetings_{year}", meetings, ttl=604800) # 7 days for seed
             
             update_status({"total_meetings": status["total_meetings"] + len(meetings)})
             
@@ -1394,7 +1394,7 @@ def seed_historical_f1_data(years=[2023, 2024]):
                 s_resp = requests.get(s_url)
                 if s_resp.status_code == 200:
                     sessions = s_resp.json()
-                    set_cached_data(f"f1_sessions_m{m_key}_sNone", sessions, ttl=86400)
+                    set_cached_data(f"f1_sessions_m{m_key}_sNone", sessions, ttl=604800)
                     
                     # Fetch basic data for each session (Drivers, Laps)
                     for session in sessions:
@@ -1403,7 +1403,7 @@ def seed_historical_f1_data(years=[2023, 2024]):
                             d_url = f"{OPENF1_BASE_URL}/{dtype}?session_key={s_key}"
                             d_resp = requests.get(d_url)
                             if d_resp.status_code == 200:
-                                set_cached_data(f"f1_{dtype}_sk{s_key}", d_resp.json(), ttl=86400)
+                                set_cached_data(f"f1_{dtype}_sk{s_key}", d_resp.json(), ttl=604800)
                             time.sleep(0.5) # Prevent rate limit during seeding
                 
                 update_status({"processed_meetings": status["processed_meetings"] + 1})
@@ -1459,11 +1459,13 @@ def start_background_worker():
                 # Refresh current year meetings
                 if now - last_run["meetings"] >= current_intervals.get("meetings", 1800):
                     year = datetime.now().year
-                    url = f"{OPENF1_BASE_URL}/meetings?year={year}"
-                    resp = requests.get(url)
-                    if resp.status_code == 200:
-                        set_cached_data(f"f1_meetings_{year}", resp.json(), ttl=3600)
-                        update_last_refresh("meetings")
+                    # Check if we already have meetings cached
+                    if not get_cached_data(f"f1_meetings_{year}"):
+                        url = f"{OPENF1_BASE_URL}/meetings?year={year}"
+                        resp = requests.get(url)
+                        if resp.status_code == 200:
+                            set_cached_data(f"f1_meetings_{year}", resp.json(), ttl=86400) # 24h
+                            update_last_refresh("meetings")
                     last_run["meetings"] = now
 
                 # Refresh sessions for current year (every 30m)
@@ -1472,19 +1474,22 @@ def start_background_worker():
                     m_url = f"{OPENF1_BASE_URL}/meetings?year={year}"
                     m_resp = requests.get(m_url)
                     if m_resp.status_code == 200:
-                        for meeting in m_resp.json():
+                        meetings = m_resp.json()
+                        for meeting in meetings:
                             m_key = meeting['meeting_key']
-                            s_url = f"{OPENF1_BASE_URL}/sessions?meeting_key={m_key}"
-                            s_resp = requests.get(s_url)
-                            if s_resp.status_code == 200:
-                                set_cached_data(f"f1_sessions_m{m_key}_sNone", s_resp.json(), ttl=3600)
+                            # Check if we already have sessions cached for this meeting
+                            if not get_cached_data(f"f1_sessions_m{m_key}_sNone"):
+                                s_url = f"{OPENF1_BASE_URL}/sessions?meeting_key={m_key}"
+                                s_resp = requests.get(s_url)
+                                if s_resp.status_code == 200:
+                                    set_cached_data(f"f1_sessions_m{m_key}_sNone", s_resp.json(), ttl=86400)
                         update_last_refresh("sessions")
                     last_run["sessions"] = now
 
                 # Refresh dynamic data for monitored sessions
                 monitored = get_monitored_sessions()
                 for s_key in monitored:
-                    for dtype in ['weather', 'positions', 'car_data', 'laps', 'race_control']:
+                    for dtype in ['weather', 'positions', 'car_data', 'laps', 'race_control', 'drivers', 'location']:
                         interval = current_intervals.get(dtype, 60)
                         lr_key = f"{dtype}_{s_key}"
                         if now - last_run.get(lr_key, 0) >= interval:
@@ -1555,6 +1560,13 @@ async def proxy_data(data_type: str, session_key: int, date_gt: str = None):
         update_metric("cache_hits")
         add_monitored_session(session_key)
         return cached
+
+    # If not in cache and it's drivers or location (relatively static), 
+    # and we don't have a broad cache, we might want to allow a one-time fetch
+    # but the user said "should just be showing the cached data".
+    # However, 'drivers' and 'location' are often missing from background pulls
+    # if not explicitly seeded. Let's stick to the rule but maybe add them to background?
+    # Actually, let's keep it cache-only as requested.
 
     update_metric("cache_misses")
     # Only return cached data to avoid rate-limiting issues on multi-client usage
