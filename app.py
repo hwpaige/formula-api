@@ -145,6 +145,7 @@ async def root(request: Request):
         <!-- Tabs -->
         <div class="flex border-b border-slate-800 mb-8 overflow-x-auto">
             <button onclick="showTab('metrics')" id="tab-metrics" class="px-6 py-3 font-bold text-sm tab-active transition-all whitespace-nowrap">Metrics</button>
+            <button onclick="showTab('calendar')" id="tab-calendar" class="px-6 py-3 font-bold text-sm text-slate-500 hover:text-slate-300 transition-all whitespace-nowrap">Race Calendar</button>
             <button onclick="showTab('cache')" id="tab-cache" class="px-6 py-3 font-bold text-sm text-slate-500 hover:text-slate-300 transition-all whitespace-nowrap">Cache Inspector</button>
             <button onclick="showTab('seeding')" id="tab-seeding" class="px-6 py-3 font-bold text-sm text-slate-500 hover:text-slate-300 transition-all whitespace-nowrap">Seeding</button>
             <button onclick="showTab('docs')" id="tab-docs" class="px-6 py-3 font-bold text-sm text-slate-500 hover:text-slate-300 transition-all whitespace-nowrap">API Docs</button>
@@ -212,6 +213,30 @@ async def root(request: Request):
                             <span class="px-2 py-0.5 bg-blue-500/10 text-blue-400 rounded text-[10px] font-bold uppercase">Production</span>
                         </div>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Race Calendar Tab -->
+        <div id="content-calendar" class="tab-content hidden space-y-6">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-2xl font-bold tracking-tight">F1 Race Calendar</h2>
+                <div class="flex items-center gap-4">
+                    <select id="calendar-year-select" onchange="refreshCalendar()" class="bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-sm font-bold text-slate-200 outline-none focus:border-red-500 transition-all">
+                        <option value="2025">2025 Season</option>
+                        <option value="2024" selected>2024 Season</option>
+                        <option value="2023">2023 Season</option>
+                    </select>
+                    <button onclick="refreshCalendar()" class="p-2 hover:bg-slate-800 rounded-lg transition-all text-slate-400 hover:text-red-500" title="Refresh Calendar">
+                        <i data-lucide="refresh-cw" class="w-5 h-5" id="refresh-icon-calendar"></i>
+                    </button>
+                </div>
+            </div>
+            <div id="calendar-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- Meetings will be loaded here -->
+                <div class="col-span-full py-20 text-center text-slate-500 animate-pulse">
+                    <i data-lucide="calendar" class="w-12 h-12 mx-auto mb-4 opacity-20"></i>
+                    <p>Loading the F1 calendar...</p>
                 </div>
             </div>
         </div>
@@ -347,6 +372,132 @@ async def root(request: Request):
             }
         }
 
+        function showTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('[id^="tab-"]').forEach(el => el.classList.remove('tab-active', 'text-slate-200'));
+            document.querySelectorAll('[id^="tab-"]').forEach(el => el.classList.add('text-slate-500'));
+            
+            document.getElementById('content-' + tabId).classList.remove('hidden');
+            document.getElementById('tab-' + tabId).classList.add('tab-active', 'text-slate-200');
+            document.getElementById('tab-' + tabId).classList.remove('text-slate-500');
+
+            if (tabId === 'cache') refreshCacheKeys();
+            if (tabId === 'calendar') refreshCalendar();
+        }
+
+        async function refreshCalendar() {
+            const year = document.getElementById('calendar-year-select').value;
+            const listEl = document.getElementById('calendar-list');
+            const icon = document.getElementById('refresh-icon-calendar');
+            
+            if (icon) icon.classList.add('animate-spin');
+            
+            try {
+                const resp = await fetch(`/meetings?year=${year}`);
+                const meetings = await resp.json();
+                
+                if (!meetings || meetings.length === 0) {
+                    listEl.innerHTML = `
+                        <div class="col-span-full py-20 text-center text-slate-500 border border-dashed border-slate-800 rounded-3xl">
+                            <i data-lucide="frown" class="w-12 h-12 mx-auto mb-4 opacity-20"></i>
+                            <p>No meetings found for ${year} in cache.</p>
+                            <p class="text-xs mt-2">Try seeding this year in the Seeding tab.</p>
+                        </div>
+                    `;
+                } else {
+                    // Sort by date (OpenF1 returns them mostly sorted, but let's be sure)
+                    meetings.sort((a, b) => new Date(a.date_start) - new Date(b.date_start));
+                    
+                    let html = '';
+                    meetings.forEach(m => {
+                        const startDate = new Date(m.date_start);
+                        const dateStr = startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                        
+                        html += `
+                            <div class="bg-slate-900/50 border border-slate-800 rounded-2xl overflow-hidden hover:border-slate-700 transition-all group flex flex-col">
+                                <div class="p-5 flex-1">
+                                    <div class="flex justify-between items-start mb-4">
+                                        <div class="bg-red-500/10 text-red-500 text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider">
+                                            Round ${m.meeting_key % 100}
+                                        </div>
+                                        <div class="text-slate-500 text-xs font-mono font-bold">${dateStr}</div>
+                                    </div>
+                                    <h3 class="text-lg font-bold text-white group-hover:text-red-400 transition-colors line-clamp-1">${m.meeting_name}</h3>
+                                    <p class="text-slate-500 text-sm mb-4">${m.location}, ${m.country_name}</p>
+                                    
+                                    <div id="sessions-container-${m.meeting_key}" class="space-y-2 mt-4 pt-4 border-t border-slate-800/50">
+                                        <button onclick="fetchSessionsForMeeting(${m.meeting_key})" class="w-full py-2 text-xs font-bold text-slate-400 hover:text-white bg-slate-800/30 hover:bg-slate-800 rounded-lg transition-all flex items-center justify-center gap-2">
+                                            <i data-lucide="list" class="w-3.5 h-3.5"></i>
+                                            Show Sessions
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    listEl.innerHTML = html;
+                }
+            } catch (e) {
+                listEl.innerHTML = `<div class="col-span-full py-20 text-center text-red-400">Failed to load calendar: ${e.message}</div>`;
+            } finally {
+                if (icon) icon.classList.remove('animate-spin');
+                lucide.createIcons();
+            }
+        }
+
+        async function fetchSessionsForMeeting(meetingKey) {
+            const container = document.getElementById(`sessions-container-${meetingKey}`);
+            container.innerHTML = '<div class="py-4 text-center text-slate-600 animate-pulse text-[10px] font-bold uppercase tracking-widest">Fetching Sessions...</div>';
+            
+            try {
+                const resp = await fetch(`/sessions?meeting_key=${meetingKey}`);
+                const sessions = await resp.json();
+                
+                if (!sessions || sessions.length === 0) {
+                    container.innerHTML = '<div class="text-[10px] text-slate-500 italic py-2">No sessions found in cache.</div>';
+                } else {
+                    // Sort sessions by date
+                    sessions.sort((a, b) => new Date(a.date_start) - new Date(b.date_start));
+                    
+                    let html = '<div class="space-y-2">';
+                    sessions.forEach(s => {
+                        html += `
+                            <div class="p-3 bg-slate-950/50 border border-slate-800 rounded-xl hover:border-slate-700 transition-all cursor-pointer group/session" onclick="viewSessionData(${s.session_key})">
+                                <div class="flex justify-between items-center">
+                                    <div>
+                                        <div class="text-xs font-bold text-slate-200 group-hover/session:text-red-400 transition-colors">${s.session_name}</div>
+                                        <div class="text-[9px] text-slate-500 font-mono">${new Date(s.date_start).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
+                                    </div>
+                                    <i data-lucide="chevron-right" class="w-3.5 h-3.5 text-slate-700 group-hover/session:text-red-500 transition-all"></i>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    html += '</div>';
+                    container.innerHTML = html;
+                    lucide.createIcons();
+                }
+            } catch (e) {
+                container.innerHTML = `<div class="text-[10px] text-red-500 py-2">Error: ${e.message}</div>`;
+            }
+        }
+
+        async function viewSessionData(sessionKey) {
+            // Placeholder for deep session data view
+            // For now, let's just show a quick overview in an alert or a future modal
+            try {
+                const resp = await fetch(`/drivers?session_key=${sessionKey}`);
+                const drivers = await resp.json();
+                
+                let driverList = Array.isArray(drivers) ? drivers.map(d => `${d.broadcast_name} (${d.team_name})`).join('\n') : "No driver data";
+                if (driverList.length > 300) driverList = driverList.substring(0, 300) + "...";
+                
+                alert(`Session Details (Key: ${sessionKey})\n\nDrivers Present:\n${driverList}`);
+            } catch (e) {
+                alert(`Session: ${sessionKey}\nError fetching driver list: ${e.message}`);
+            }
+        }
+
         async function refreshCacheKeys() {
             const listEl = document.getElementById('cache-key-list');
             listEl.innerHTML = '<div class="p-8 text-center text-slate-500 animate-pulse">Scanning Redis...</div>';
@@ -361,8 +512,8 @@ async def root(request: Request):
                 data.keys.forEach(key => {
                     html += `
                         <div class="p-4 flex justify-between items-center hover:bg-slate-900/50 group transition-all">
-                            <code class="text-sm text-blue-400">${key}</code>
-                            <button onclick="viewCacheData('${key}')" class="text-[10px] font-bold uppercase text-slate-500 group-hover:text-slate-200 transition-all">View Data</button>
+                            <code class="text-sm text-blue-400 truncate mr-4">${key}</code>
+                            <button onclick="viewCacheData('${key}')" class="flex-shrink-0 text-[10px] font-bold uppercase text-slate-500 group-hover:text-slate-200 transition-all">View Data</button>
                         </div>
                     `;
                 });
