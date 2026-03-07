@@ -41,6 +41,79 @@ METRICS_KEY = "f1_api_metrics"
 METRICS_HISTORY_KEY = "f1_api_metrics_history"
 SEEDING_STATUS_KEY = "f1_api_seeding_status"
 SEEDING_STOP_SIGNAL_KEY = "f1_api_seeding_stop_signal"
+REFRESH_INTERVALS_KEY = "f1_api_refresh_intervals"
+LAST_REFRESH_KEY = "f1_api_last_refresh"
+MONITORED_SESSIONS_KEY = "f1_api_monitored_sessions"
+
+# Default Refresh Intervals (seconds)
+DEFAULT_INTERVALS = {
+    "weather": 30,
+    "positions": 5,
+    "car_data": 5,
+    "laps": 60,
+    "race_control": 60,
+    "meetings": 1800,
+    "sessions": 1800,
+    "metrics": 60
+}
+
+def get_intervals():
+    if r:
+        try:
+            data = r.get(REFRESH_INTERVALS_KEY)
+            if data:
+                return json.loads(data)
+        except: pass
+    return DEFAULT_INTERVALS.copy()
+
+def set_intervals(intervals):
+    if r:
+        try:
+            r.set(REFRESH_INTERVALS_KEY, json.dumps(intervals))
+            return True
+        except: pass
+    return False
+
+def get_last_refresh():
+    if r:
+        try:
+            data = r.get(LAST_REFRESH_KEY)
+            if data:
+                return json.loads(data)
+        except: pass
+    return {}
+
+def update_last_refresh(category, timestamp=None):
+    if not timestamp:
+        timestamp = datetime.now(timezone.utc).isoformat()
+    if r:
+        try:
+            data = r.get(LAST_REFRESH_KEY)
+            last_refresh = json.loads(data) if data else {}
+            last_refresh[category] = timestamp
+            r.set(LAST_REFRESH_KEY, json.dumps(last_refresh))
+        except: pass
+
+def get_monitored_sessions():
+    if r:
+        try:
+            data = r.get(MONITORED_SESSIONS_KEY)
+            if data:
+                return json.loads(data)
+        except: pass
+    return []
+
+def add_monitored_session(session_key):
+    if not session_key: return
+    sessions = get_monitored_sessions()
+    if session_key not in sessions:
+        sessions.append(session_key)
+        # Keep only last 5 sessions to avoid heavy background load
+        if len(sessions) > 5:
+            sessions.pop(0)
+        if r:
+            try: r.set(MONITORED_SESSIONS_KEY, json.dumps(sessions))
+            except: pass
 
 def update_metric(field):
     if field in _local_metrics:
@@ -147,6 +220,7 @@ async def root(request: Request):
             <button onclick="showTab('metrics')" id="tab-metrics" class="px-6 py-3 font-bold text-sm tab-active transition-all whitespace-nowrap">Metrics</button>
             <button onclick="showTab('calendar')" id="tab-calendar" class="px-6 py-3 font-bold text-sm text-slate-500 hover:text-slate-300 transition-all whitespace-nowrap">Race Calendar</button>
             <button onclick="showTab('session_detail')" id="tab-session_detail" class="px-6 py-3 font-bold text-sm text-slate-500 hover:text-slate-300 transition-all whitespace-nowrap hidden">Session Detail</button>
+            <button onclick="showTab('refresh')" id="tab-refresh" class="px-6 py-3 font-bold text-sm text-slate-500 hover:text-slate-300 transition-all whitespace-nowrap">Refresh Controls</button>
             <button onclick="showTab('cache')" id="tab-cache" class="px-6 py-3 font-bold text-sm text-slate-500 hover:text-slate-300 transition-all whitespace-nowrap">Cache Inspector</button>
             <button onclick="showTab('seeding')" id="tab-seeding" class="px-6 py-3 font-bold text-sm text-slate-500 hover:text-slate-300 transition-all whitespace-nowrap">Seeding</button>
             <button onclick="showTab('docs')" id="tab-docs" class="px-6 py-3 font-bold text-sm text-slate-500 hover:text-slate-300 transition-all whitespace-nowrap">API Docs</button>
@@ -326,6 +400,45 @@ async def root(request: Request):
             </div>
         </div>
 
+        <!-- Refresh Controls Tab -->
+        <div id="content-refresh" class="tab-content hidden space-y-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="bg-slate-900/50 border border-slate-800 rounded-2xl p-6">
+                    <h3 class="text-lg font-bold mb-4 flex items-center gap-2">
+                        <i data-lucide="timer" class="text-blue-500 w-5 h-5"></i>
+                        Background Refresh Timers
+                    </h3>
+                    <div id="refresh-timers-list" class="space-y-4">
+                        <!-- Timers will be loaded here -->
+                        <div class="text-center py-8 text-slate-600 animate-pulse">Loading timers...</div>
+                    </div>
+                </div>
+                
+                <div class="bg-slate-900/50 border border-slate-800 rounded-2xl p-6">
+                    <h3 class="text-lg font-bold mb-4 flex items-center gap-2">
+                        <i data-lucide="settings-2" class="text-emerald-500 w-5 h-5"></i>
+                        Interval Configuration
+                    </h3>
+                    <div id="interval-settings-form" class="space-y-4">
+                        <!-- Settings will be loaded here -->
+                        <div class="text-center py-8 text-slate-600 animate-pulse">Loading settings...</div>
+                    </div>
+                    <button onclick="saveIntervals()" class="w-full mt-6 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-4 rounded-xl transition-all">Save All Intervals</button>
+                </div>
+            </div>
+            
+            <div class="bg-slate-900/50 border border-slate-800 rounded-2xl p-6">
+                <h3 class="text-lg font-bold mb-4 flex items-center gap-2">
+                    <i data-lucide="monitor" class="text-amber-500 w-5 h-5"></i>
+                    Monitored Sessions
+                </h3>
+                <div id="monitored-sessions-list" class="flex flex-wrap gap-3">
+                    <div class="text-slate-500 text-sm italic">No sessions currently being actively monitored by the background worker.</div>
+                </div>
+                <p class="text-xs text-slate-500 mt-4 italic">* A session is automatically monitored for 30 minutes after its data is requested via the API.</p>
+            </div>
+        </div>
+
         <!-- Cache Inspector Tab -->
         <div id="content-cache" class="tab-content hidden">
             <div class="bg-slate-900/50 border border-slate-800 rounded-2xl overflow-hidden">
@@ -370,31 +483,215 @@ async def root(request: Request):
         </div>
 
         <!-- API Docs Tab -->
-        <div id="content-docs" class="tab-content hidden">
-            <div class="bg-slate-900/50 border border-slate-800 rounded-2xl p-6">
-                <h3 class="text-lg font-bold mb-6">Endpoint Documentation</h3>
-                <div class="space-y-4">
-                    <div class="p-4 bg-slate-950 rounded-xl border border-slate-800">
-                        <div class="flex items-center gap-2 mb-2">
-                            <span class="px-2 py-0.5 bg-blue-500/10 text-blue-400 rounded text-[10px] font-bold uppercase">GET</span>
-                            <code class="text-blue-400 font-bold">/meetings?year=2024</code>
-                        </div>
-                        <p class="text-xs text-slate-500">Fetch all F1 meetings for a specific year.</p>
+        <div id="content-docs" class="tab-content hidden space-y-8">
+            <div class="bg-slate-900/50 border border-slate-800 rounded-2xl p-8">
+                <div class="flex items-center gap-4 mb-8">
+                    <div class="p-3 bg-red-500/10 rounded-xl">
+                        <i data-lucide="book-open" class="text-red-500 w-8 h-8"></i>
                     </div>
-                    <div class="p-4 bg-slate-950 rounded-xl border border-slate-800">
-                        <div class="flex items-center gap-2 mb-2">
-                            <span class="px-2 py-0.5 bg-blue-500/10 text-blue-400 rounded text-[10px] font-bold uppercase">GET</span>
-                            <code class="text-blue-400 font-bold">/sessions?meeting_key=1234</code>
-                        </div>
-                        <p class="text-xs text-slate-500">Fetch sessions for a given meeting.</p>
+                    <div>
+                        <h2 class="text-2xl font-bold tracking-tight">API Documentation</h2>
+                        <p class="text-slate-400 text-sm mt-1">Detailed information about endpoints, parameters, and caching policies.</p>
                     </div>
-                    <div class="p-4 bg-slate-950 rounded-xl border border-slate-800">
-                        <div class="flex items-center gap-2 mb-2">
-                            <span class="px-2 py-0.5 bg-blue-500/10 text-blue-400 rounded text-[10px] font-bold uppercase">GET</span>
-                            <code class="text-blue-400 font-bold">/{data_type}?session_key=5678</code>
+                </div>
+
+                <div class="space-y-12">
+                    <!-- Base URL Section -->
+                    <section>
+                        <h3 class="text-lg font-bold mb-4 flex items-center gap-2">
+                            <i data-lucide="globe" class="text-slate-500 w-5 h-5"></i>
+                            Base Configuration
+                        </h3>
+                        <div class="bg-slate-950 p-6 rounded-2xl border border-slate-800 font-mono text-sm">
+                            <div class="flex justify-between items-center">
+                                <span class="text-slate-500">API BASE URL:</span>
+                                <span class="text-blue-400 font-bold" id="api-base-url-display">https://f1-buddy-api.herokuapp.com</span>
+                            </div>
                         </div>
-                        <p class="text-xs text-slate-500">Proxy dynamic data. Valid types: weather, positions, drivers, laps, race_control, location, car_data, stints, intervals, pit.</p>
-                    </div>
+                    </section>
+
+                    <!-- Core Endpoints Section -->
+                    <section>
+                        <h3 class="text-lg font-bold mb-6 flex items-center gap-2 text-slate-200">
+                            <i data-lucide="terminal" class="text-blue-500 w-5 h-5"></i>
+                            Core Endpoints
+                        </h3>
+                        <div class="space-y-6">
+                            <!-- /metrics -->
+                            <div class="p-6 bg-slate-950 rounded-2xl border border-slate-800 hover:border-slate-700 transition-all">
+                                <div class="flex flex-wrap items-center gap-3 mb-3">
+                                    <span class="px-2 py-0.5 bg-blue-500/10 text-blue-400 rounded text-[10px] font-bold uppercase">GET</span>
+                                    <code class="text-blue-400 font-bold text-lg">/metrics</code>
+                                </div>
+                                <p class="text-sm text-slate-400 mb-4">Returns system health, request counts, cache efficiency, and uptime.</p>
+                                <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Sample Response</div>
+                                <pre class="text-[11px] bg-slate-900 p-4 rounded-xl border border-slate-800/50 text-emerald-400 overflow-x-auto">
+{
+  "total_requests": 1542,
+  "cache_hits": 1320,
+  "cache_misses": 222,
+  "openf1_errors": 0,
+  "redis_connected": true,
+  "uptime": "05:12:34"
+}</pre>
+                            </div>
+
+                            <!-- /meetings -->
+                            <div class="p-6 bg-slate-950 rounded-2xl border border-slate-800 hover:border-slate-700 transition-all">
+                                <div class="flex flex-wrap items-center gap-3 mb-3">
+                                    <span class="px-2 py-0.5 bg-blue-500/10 text-blue-400 rounded text-[10px] font-bold uppercase">GET</span>
+                                    <code class="text-blue-400 font-bold text-lg">/meetings?year=2024</code>
+                                </div>
+                                <p class="text-sm text-slate-400 mb-4">Fetch all F1 Grand Prix meetings for a specific year. Includes location, country, and timing data.</p>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                    <div class="bg-slate-900/50 p-3 rounded-xl border border-slate-800/50">
+                                        <div class="text-[9px] text-slate-500 uppercase font-bold mb-1">Parameter: year</div>
+                                        <div class="text-xs text-slate-300 italic">Optional. Defaults to all meetings if omitted.</div>
+                                    </div>
+                                    <div class="bg-slate-900/50 p-3 rounded-xl border border-slate-800/50">
+                                        <div class="text-[9px] text-slate-500 uppercase font-bold mb-1">Cache TTL</div>
+                                        <div class="text-xs text-emerald-500 font-bold">1 Hour (3600s)</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- /sessions -->
+                            <div class="p-6 bg-slate-950 rounded-2xl border border-slate-800 hover:border-slate-700 transition-all">
+                                <div class="flex flex-wrap items-center gap-3 mb-3">
+                                    <span class="px-2 py-0.5 bg-blue-500/10 text-blue-400 rounded text-[10px] font-bold uppercase">GET</span>
+                                    <code class="text-blue-400 font-bold text-lg">/sessions?meeting_key=1234</code>
+                                </div>
+                                <p class="text-sm text-slate-400 mb-4">Fetch all sessions (Practice, Qualifying, Race, Sprint) for a specific meeting.</p>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                    <div class="bg-slate-900/50 p-3 rounded-xl border border-slate-800/50">
+                                        <div class="text-[9px] text-slate-500 uppercase font-bold mb-1">Parameter: meeting_key</div>
+                                        <div class="text-xs text-slate-300 italic">Filter sessions by GP meeting identifier.</div>
+                                    </div>
+                                    <div class="bg-slate-900/50 p-3 rounded-xl border border-slate-800/50">
+                                        <div class="text-[9px] text-slate-500 uppercase font-bold mb-1">Parameter: session_key</div>
+                                        <div class="text-xs text-slate-300 italic">Optional. Fetch single session details.</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- /{data_type} -->
+                            <div class="p-6 bg-slate-950 rounded-2xl border border-slate-800 hover:border-slate-700 transition-all">
+                                <div class="flex flex-wrap items-center gap-3 mb-3">
+                                    <span class="px-2 py-0.5 bg-blue-500/10 text-blue-400 rounded text-[10px] font-bold uppercase">GET</span>
+                                    <code class="text-blue-400 font-bold text-lg">/{data_type}?session_key=5678</code>
+                                </div>
+                                <p class="text-sm text-slate-400 mb-4">A powerful proxy endpoint for all dynamic F1 data types. Caching TTLs vary based on data volatility.</p>
+                                
+                                <div class="bg-slate-900/50 rounded-xl border border-slate-800/50 overflow-hidden mb-6">
+                                    <table class="w-full text-left text-[11px]">
+                                        <thead class="bg-slate-800/50 text-slate-400 font-bold uppercase tracking-wider">
+                                            <tr>
+                                                <th class="p-3">Data Type</th>
+                                                <th class="p-3">Description</th>
+                                                <th class="p-3">TTL</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="divide-y divide-slate-800/50 text-slate-300">
+                                            <tr>
+                                                <td class="p-3 font-mono text-blue-400">weather</td>
+                                                <td class="p-3">Air/Track temp, rain, humidity</td>
+                                                <td class="p-3 text-amber-500">30s</td>
+                                            </tr>
+                                            <tr>
+                                                <td class="p-3 font-mono text-blue-400">positions</td>
+                                                <td class="p-3">Live X/Y/Z GPS track positions</td>
+                                                <td class="p-3 text-red-500">5s</td>
+                                            </tr>
+                                            <tr>
+                                                <td class="p-3 font-mono text-blue-400">car_data</td>
+                                                <td class="p-3">Telemetry (RPM, Speed, Gear, DRS)</td>
+                                                <td class="p-3 text-red-500">5s</td>
+                                            </tr>
+                                            <tr>
+                                                <td class="p-3 font-mono text-blue-400">laps</td>
+                                                <td class="p-3">Lap times and sector durations</td>
+                                                <td class="p-3 text-emerald-500">300s</td>
+                                            </tr>
+                                            <tr>
+                                                <td class="p-3 font-mono text-blue-400">race_control</td>
+                                                <td class="p-3">Flags, safety cars, investigation notices</td>
+                                                <td class="p-3 text-emerald-500">300s</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <div class="bg-slate-900/50 p-4 rounded-xl border border-slate-800/50">
+                                    <div class="text-[9px] text-slate-500 uppercase font-bold mb-2">Incremental Fetching</div>
+                                    <div class="flex items-center gap-2">
+                                        <code class="text-[10px] text-amber-400 font-bold">?date_gt=2024-03-07T13:00:00</code>
+                                        <p class="text-[10px] text-slate-400 italic">Add this parameter to fetch data recorded ONLY after this timestamp.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Management Endpoints Section -->
+                    <section>
+                        <h3 class="text-lg font-bold mb-6 flex items-center gap-2 text-slate-200">
+                            <i data-lucide="shield-check" class="text-emerald-500 w-5 h-5"></i>
+                            Management Endpoints
+                        </h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div class="p-4 bg-slate-950 rounded-xl border border-slate-800">
+                                <div class="flex items-center gap-2 mb-2">
+                                    <span class="px-2 py-0.5 bg-purple-500/10 text-purple-400 rounded text-[9px] font-bold uppercase">POST</span>
+                                    <code class="text-purple-400 font-bold text-xs">/seed_history?years=2024</code>
+                                </div>
+                                <p class="text-[11px] text-slate-500">Start background seeding worker for specific years.</p>
+                            </div>
+                            <div class="p-4 bg-slate-950 rounded-xl border border-slate-800">
+                                <div class="flex items-center gap-2 mb-2">
+                                    <span class="px-2 py-0.5 bg-blue-500/10 text-blue-400 rounded text-[9px] font-bold uppercase">GET</span>
+                                    <code class="text-blue-400 font-bold text-xs">/cache_keys</code>
+                                </div>
+                                <p class="text-[11px] text-slate-500">List all currently cached keys in Redis.</p>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Code Examples Section -->
+                    <section>
+                        <h3 class="text-lg font-bold mb-6 flex items-center gap-2 text-slate-200">
+                            <i data-lucide="code" class="text-amber-500 w-5 h-5"></i>
+                            Quick Examples
+                        </h3>
+                        <div class="space-y-6">
+                            <!-- Python -->
+                            <div class="bg-slate-950 rounded-2xl border border-slate-800 overflow-hidden">
+                                <div class="px-4 py-2 bg-slate-900 border-b border-slate-800 flex justify-between items-center">
+                                    <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Python (Requests)</span>
+                                </div>
+                                <pre class="p-6 text-xs text-blue-300 font-mono overflow-x-auto">
+import requests
+
+BASE_URL = "https://f1-buddy-api.herokuapp.com"
+
+# Fetch 2024 meetings
+meetings = requests.get(f"{BASE_URL}/meetings", params={"year": 2024}).json()
+
+# Proxy weather for a session
+weather = requests.get(f"{BASE_URL}/weather", params={"session_key": 9472}).json()
+
+print(f"Recorded {len(weather)} weather samples.")</pre>
+                            </div>
+
+                            <!-- cURL -->
+                            <div class="bg-slate-950 rounded-2xl border border-slate-800 overflow-hidden">
+                                <div class="px-4 py-2 bg-slate-900 border-b border-slate-800 flex justify-between items-center">
+                                    <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">cURL</span>
+                                </div>
+                                <pre class="p-6 text-xs text-amber-400 font-mono overflow-x-auto">
+curl "https://f1-buddy-api.herokuapp.com/sessions?meeting_key=1234"</pre>
+                            </div>
+                        </div>
+                    </section>
                 </div>
             </div>
         </div>
@@ -468,6 +765,162 @@ async def root(request: Request):
 
             if (tabId === 'cache') refreshCacheKeys();
             if (tabId === 'calendar') refreshCalendar();
+            if (tabId === 'refresh') loadRefreshControls();
+        }
+
+        async function loadRefreshControls() {
+            try {
+                const resp = await fetch('/refresh_status');
+                const data = await resp.json();
+                const monitoredResp = await fetch('/cache_data/f1_api_monitored_sessions');
+                let monitored = [];
+                if (monitoredResp.ok) monitored = await monitoredResp.json();
+
+                renderTimers(data);
+                renderIntervalSettings(data.intervals);
+                renderMonitoredSessions(monitored);
+            } catch (e) {
+                console.error('Failed to load refresh controls', e);
+            }
+        }
+
+        let refreshTimers = {};
+        function renderTimers(data) {
+            const list = document.getElementById('refresh-timers-list');
+            let html = '';
+            
+            const categories = [
+                { id: 'positions', name: 'Live Positions', icon: 'navigation' },
+                { id: 'car_data', name: 'Car Telemetry', icon: 'zap' },
+                { id: 'weather', name: 'Weather Data', icon: 'cloud-sun' },
+                { id: 'laps', name: 'Lap Timings', icon: 'timer' },
+                { id: 'race_control', name: 'Race Control', icon: 'flag' },
+                { id: 'meetings', name: 'Calendar/Meetings', icon: 'calendar' },
+                { id: 'metrics', name: 'System Metrics', icon: 'activity' }
+            ];
+
+            categories.forEach(cat => {
+                const lastRef = data.last_refresh[cat.id];
+                const interval = data.intervals[cat.id] || 60;
+                
+                // Set target for countdown
+                if (lastRef) {
+                    const lastDate = new Date(lastRef);
+                    refreshTimers[cat.id] = lastDate.getTime() + (interval * 1000);
+                } else {
+                    refreshTimers[cat.id] = Date.now() + (interval * 1000);
+                }
+
+                html += `
+                    <div class="flex items-center justify-between p-4 bg-slate-950 border border-slate-800 rounded-2xl">
+                        <div class="flex items-center gap-3">
+                            <div class="p-2 bg-slate-900 rounded-lg">
+                                <i data-lucide="${cat.icon}" class="w-4 h-4 text-slate-400"></i>
+                            </div>
+                            <div>
+                                <p class="text-sm font-bold text-slate-200">${cat.name}</p>
+                                <p class="text-[10px] text-slate-500 uppercase font-bold">Last: ${lastRef ? new Date(lastRef).toLocaleTimeString() : 'Never'}</p>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <p id="timer-display-${cat.id}" class="text-lg font-mono font-bold text-blue-400">--:--</p>
+                            <p class="text-[9px] text-slate-600 font-bold uppercase">Next Pull</p>
+                        </div>
+                    </div>
+                `;
+            });
+            list.innerHTML = html;
+            lucide.createIcons();
+            updateCountdownDisplays();
+        }
+
+        function updateCountdownDisplays() {
+            const now = Date.now();
+            Object.keys(refreshTimers).forEach(id => {
+                const el = document.getElementById(`timer-display-${id}`);
+                if (el) {
+                    const diff = refreshTimers[id] - now;
+                    if (diff <= 0) {
+                        el.textContent = "PULLING...";
+                        el.classList.remove('text-blue-400');
+                        el.classList.add('text-emerald-400', 'animate-pulse');
+                    } else {
+                        const totalSec = Math.floor(diff / 1000);
+                        const min = Math.floor(totalSec / 60);
+                        const sec = totalSec % 60;
+                        el.textContent = `${min.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
+                        el.classList.add('text-blue-400');
+                        el.classList.remove('text-emerald-400', 'animate-pulse');
+                    }
+                }
+            });
+        }
+        setInterval(updateCountdownDisplays, 1000);
+
+        function renderIntervalSettings(intervals) {
+            const form = document.getElementById('interval-settings-form');
+            let html = '<div class="grid grid-cols-1 gap-4">';
+            
+            const keys = Object.keys(intervals).sort();
+            keys.forEach(key => {
+                html += `
+                    <div class="space-y-1">
+                        <div class="flex justify-between">
+                            <label class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">${key.replace('_', ' ')} (seconds)</label>
+                            <span class="text-[10px] font-mono text-slate-400" id="val-${key}">${intervals[key]}s</span>
+                        </div>
+                        <input type="range" id="input-${key}" min="5" max="3600" step="5" value="${intervals[key]}" 
+                               oninput="document.getElementById('val-${key}').textContent = this.value + 's'"
+                               class="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500">
+                    </div>
+                `;
+            });
+            html += '</div>';
+            form.innerHTML = html;
+        }
+
+        async function saveIntervals() {
+            const inputs = document.querySelectorAll('input[id^="input-"]');
+            const newIntervals = {};
+            inputs.forEach(input => {
+                const key = input.id.replace('input-', '');
+                newIntervals[key] = parseInt(input.value);
+            });
+
+            try {
+                const resp = await fetch('/intervals', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(newIntervals)
+                });
+                if (resp.ok) {
+                    alert('Intervals updated successfully!');
+                    loadRefreshControls();
+                } else {
+                    alert('Failed to update intervals');
+                }
+            } catch (e) {
+                alert('Error saving intervals');
+            }
+        }
+
+        function renderMonitoredSessions(sessions) {
+            const list = document.getElementById('monitored-sessions-list');
+            if (!sessions || sessions.length === 0) {
+                list.innerHTML = '<div class="text-slate-500 text-sm italic">No sessions currently being actively monitored by the background worker.</div>';
+                return;
+            }
+
+            let html = '';
+            sessions.forEach(sKey => {
+                html += `
+                    <div class="px-4 py-2 bg-slate-950 border border-slate-800 rounded-xl flex items-center gap-2">
+                        <div class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                        <span class="text-sm font-mono text-slate-300">Session ${sKey}</span>
+                    </div>
+                `;
+            });
+            list.innerHTML = html;
         }
 
         async function refreshCalendar() {
@@ -490,13 +943,42 @@ async def root(request: Request):
                         </div>
                     `;
                 } else {
-                    // Sort by date (OpenF1 returns them mostly sorted, but let's be sure)
+                    // Sort by date
                     meetings.sort((a, b) => new Date(a.date_start) - new Date(b.date_start));
                     
+                    // Fetch all sessions for all meetings in parallel
+                    const sessionPromises = meetings.map(m => fetch(`/sessions?meeting_key=${m.meeting_key}`).then(r => r.json()));
+                    const allSessions = await Promise.all(sessionPromises);
+                    
                     let html = '';
-                    meetings.forEach(m => {
+                    meetings.forEach((m, idx) => {
                         const startDate = new Date(m.date_start);
                         const dateStr = startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                        const sessions = allSessions[idx] || [];
+                        
+                        // Sort sessions by date
+                        sessions.sort((a, b) => new Date(a.date_start) - new Date(b.date_start));
+                        
+                        let sessionsHtml = '';
+                        if (sessions.length === 0) {
+                            sessionsHtml = '<div class="text-[10px] text-slate-500 italic py-2">No sessions found.</div>';
+                        } else {
+                            sessionsHtml = '<div class="space-y-2">';
+                            sessions.forEach(s => {
+                                sessionsHtml += `
+                                    <div class="p-3 bg-slate-950/50 border border-slate-800 rounded-xl hover:border-slate-700 transition-all cursor-pointer group/session" onclick="viewSessionData(${s.session_key})">
+                                        <div class="flex justify-between items-center">
+                                            <div>
+                                                <div class="text-xs font-bold text-slate-200 group-hover/session:text-red-400 transition-colors">${s.session_name}</div>
+                                                <div class="text-[9px] text-slate-500 font-mono">${new Date(s.date_start).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
+                                            </div>
+                                            <i data-lucide="chevron-right" class="w-3.5 h-3.5 text-slate-700 group-hover/session:text-red-500 transition-all"></i>
+                                        </div>
+                                    </div>
+                                `;
+                            });
+                            sessionsHtml += '</div>';
+                        }
                         
                         html += `
                             <div class="bg-slate-900/50 border border-slate-800 rounded-2xl overflow-hidden hover:border-slate-700 transition-all group flex flex-col">
@@ -511,10 +993,7 @@ async def root(request: Request):
                                     <p class="text-slate-500 text-sm mb-4">${m.location}, ${m.country_name}</p>
                                     
                                     <div id="sessions-container-${m.meeting_key}" class="space-y-2 mt-4 pt-4 border-t border-slate-800/50">
-                                        <button onclick="fetchSessionsForMeeting(${m.meeting_key})" class="w-full py-2 text-xs font-bold text-slate-400 hover:text-white bg-slate-800/30 hover:bg-slate-800 rounded-lg transition-all flex items-center justify-center gap-2">
-                                            <i data-lucide="list" class="w-3.5 h-3.5"></i>
-                                            Show Sessions
-                                        </button>
+                                        ${sessionsHtml}
                                     </div>
                                 </div>
                             </div>
@@ -530,42 +1009,6 @@ async def root(request: Request):
             }
         }
 
-        async function fetchSessionsForMeeting(meetingKey) {
-            const container = document.getElementById(`sessions-container-${meetingKey}`);
-            container.innerHTML = '<div class="py-4 text-center text-slate-600 animate-pulse text-[10px] font-bold uppercase tracking-widest">Fetching Sessions...</div>';
-            
-            try {
-                const resp = await fetch(`/sessions?meeting_key=${meetingKey}`);
-                const sessions = await resp.json();
-                
-                if (!sessions || sessions.length === 0) {
-                    container.innerHTML = '<div class="text-[10px] text-slate-500 italic py-2">No sessions found in cache.</div>';
-                } else {
-                    // Sort sessions by date
-                    sessions.sort((a, b) => new Date(a.date_start) - new Date(b.date_start));
-                    
-                    let html = '<div class="space-y-2">';
-                    sessions.forEach(s => {
-                        html += `
-                            <div class="p-3 bg-slate-950/50 border border-slate-800 rounded-xl hover:border-slate-700 transition-all cursor-pointer group/session" onclick="viewSessionData(${s.session_key})">
-                                <div class="flex justify-between items-center">
-                                    <div>
-                                        <div class="text-xs font-bold text-slate-200 group-hover/session:text-red-400 transition-colors">${s.session_name}</div>
-                                        <div class="text-[9px] text-slate-500 font-mono">${new Date(s.date_start).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
-                                    </div>
-                                    <i data-lucide="chevron-right" class="w-3.5 h-3.5 text-slate-700 group-hover/session:text-red-500 transition-all"></i>
-                                </div>
-                            </div>
-                        `;
-                    });
-                    html += '</div>';
-                    container.innerHTML = html;
-                    lucide.createIcons();
-                }
-            } catch (e) {
-                container.innerHTML = `<div class="text-[10px] text-red-500 py-2">Error: ${e.message}</div>`;
-            }
-        }
 
         async function viewSessionData(sessionKey) {
             // Show session detail tab
@@ -780,8 +1223,16 @@ async def root(request: Request):
 
         setInterval(fetchMetrics, 5000);
         setInterval(fetchSeedingStatus, 3000);
+        setInterval(() => {
+            if (document.getElementById('tab-refresh').classList.contains('tab-active')) {
+                loadRefreshControls();
+            }
+        }, 5000);
         fetchMetrics();
         fetchSeedingStatus();
+        
+        // Update API base URL based on current host
+        document.getElementById('api-base-url-display').textContent = window.location.origin;
     </script>
 </body>
 </html>
@@ -840,6 +1291,23 @@ async def get_seed_status():
                 return json.loads(data)
         except: pass
     return _local_seeding_status
+
+@app.get("/intervals")
+async def get_intervals_endpoint():
+    return get_intervals()
+
+@app.post("/intervals")
+async def set_intervals_endpoint(intervals: dict):
+    if set_intervals(intervals):
+        return {"status": "Intervals updated"}
+    raise HTTPException(status_code=500, detail="Failed to update intervals")
+
+@app.get("/refresh_status")
+async def get_refresh_status():
+    return {
+        "intervals": get_intervals(),
+        "last_refresh": get_last_refresh()
+    }
 
 @app.post("/seed_history")
 async def trigger_seed_history(years: str = "2023,2024"):
@@ -960,9 +1428,10 @@ def start_background_worker():
         while True:
             try:
                 now = time.time()
+                current_intervals = get_intervals()
                 
-                # Snapshot metrics (every 60s)
-                if now - last_run["metrics"] >= 60:
+                # Snapshot metrics
+                if now - last_run["metrics"] >= current_intervals.get("metrics", 60):
                     current_metrics = _local_metrics.copy()
                     if r:
                         m_data = r.get(METRICS_KEY)
@@ -980,21 +1449,51 @@ def start_background_worker():
                     if r:
                         try: r.set(METRICS_HISTORY_KEY, json.dumps(_local_metrics_history))
                         except: pass
+                    update_last_refresh("metrics")
                     last_run["metrics"] = now
-                
-                # Refresh current year meetings (every 30m)
-                if now - last_run["meetings"] >= 1800:
+
+                # Refresh current year meetings
+                if now - last_run["meetings"] >= current_intervals.get("meetings", 1800):
                     year = datetime.now().year
                     url = f"{OPENF1_BASE_URL}/meetings?year={year}"
                     resp = requests.get(url)
                     if resp.status_code == 200:
                         set_cached_data(f"f1_meetings_{year}", resp.json(), ttl=3600)
+                        update_last_refresh("meetings")
                     last_run["meetings"] = now
-                    
+
+                # Refresh sessions for current year (every 30m)
+                if now - last_run.get("sessions", 0) >= current_intervals.get("sessions", 1800):
+                    year = datetime.now().year
+                    m_url = f"{OPENF1_BASE_URL}/meetings?year={year}"
+                    m_resp = requests.get(m_url)
+                    if m_resp.status_code == 200:
+                        for meeting in m_resp.json():
+                            m_key = meeting['meeting_key']
+                            s_url = f"{OPENF1_BASE_URL}/sessions?meeting_key={m_key}"
+                            s_resp = requests.get(s_url)
+                            if s_resp.status_code == 200:
+                                set_cached_data(f"f1_sessions_m{m_key}_sNone", s_resp.json(), ttl=3600)
+                        update_last_refresh("sessions")
+                    last_run["sessions"] = now
+
+                # Refresh dynamic data for monitored sessions
+                monitored = get_monitored_sessions()
+                for s_key in monitored:
+                    for dtype in ['weather', 'positions', 'car_data', 'laps', 'race_control']:
+                        interval = current_intervals.get(dtype, 60)
+                        lr_key = f"{dtype}_{s_key}"
+                        if now - last_run.get(lr_key, 0) >= interval:
+                            url = f"{OPENF1_BASE_URL}/{dtype}?session_key={s_key}"
+                            resp = requests.get(url)
+                            if resp.status_code == 200:
+                                set_cached_data(f"f1_{dtype}_sk{s_key}", resp.json(), ttl=interval * 2)
+                                update_last_refresh(dtype)
+                            last_run[lr_key] = now
             except Exception as e:
                 print(f"Background worker error: {e}")
             
-            time.sleep(10)
+            time.sleep(1) # Check every second
             
     thread = threading.Thread(target=run, daemon=True)
     thread.start()
@@ -1012,21 +1511,9 @@ async def get_meetings(year: int = None):
         return cached
 
     update_metric("cache_misses")
-    url = f"{OPENF1_BASE_URL}/meetings"
-    if year:
-        url += f"?year={year}"
-
-    try:
-        response = requests.get(url)
-        if response.status_code == 200:
-            data = response.json()
-            set_cached_data(cache_key, data, ttl=3600)  # Cache meetings for 1 hour
-            return data
-        update_metric("openf1_errors")
-        raise HTTPException(status_code=response.status_code, detail="Error fetching meetings from OpenF1")
-    except Exception as e:
-        update_metric("openf1_errors")
-        raise e
+    # Instead of fetching from OpenF1, we only return cached data
+    # This matches the user requirement that it should just be showing cached data
+    return []
 
 @app.get("/sessions")
 async def get_sessions(meeting_key: int = None, session_key: int = None):
@@ -1035,33 +1522,19 @@ async def get_sessions(meeting_key: int = None, session_key: int = None):
     cached = get_cached_data(cache_key)
     if cached:
         update_metric("cache_hits")
+        if session_key:
+            add_monitored_session(session_key)
         return cached
 
     update_metric("cache_misses")
-    params = []
-    if meeting_key: params.append(f"meeting_key={meeting_key}")
-    if session_key: params.append(f"session_key={session_key}")
-    
-    url = f"{OPENF1_BASE_URL}/sessions"
-    if params:
-        url += "?" + "&".join(params)
-
-    try:
-        response = requests.get(url)
-        if response.status_code == 200:
-            data = response.json()
-            set_cached_data(cache_key, data, ttl=1800)  # Cache sessions for 30 mins
-            return data
-        update_metric("openf1_errors")
-        raise HTTPException(status_code=response.status_code, detail="Error fetching sessions from OpenF1")
-    except Exception as e:
-        update_metric("openf1_errors")
-        raise e
+    # Instead of fetching from OpenF1, we only return cached data
+    return []
 
 @app.get("/{data_type}")
 async def proxy_data(data_type: str, session_key: int, date_gt: str = None):
     """
     Proxy for dynamic F1 data (weather, positions, laps, etc.)
+    Only returns cached data.
     """
     update_metric("total_requests")
     allowed_types = ['weather', 'positions', 'drivers', 'laps', 'race_control', 'location', 'car_data', 'stints', 'intervals', 'pit']
@@ -1071,43 +1544,17 @@ async def proxy_data(data_type: str, session_key: int, date_gt: str = None):
     # Construct cache key
     cache_key = f"f1_{data_type}_sk{session_key}"
     if date_gt:
-        # For incremental updates, we might want shorter TTL or different keying strategy
         cache_key += f"_gt{date_gt}"
 
     cached = get_cached_data(cache_key)
     if cached:
         update_metric("cache_hits")
+        add_monitored_session(session_key)
         return cached
 
     update_metric("cache_misses")
-    url = f"{OPENF1_BASE_URL}/{data_type}?session_key={session_key}"
-    if date_gt:
-        url += f"&date>={date_gt}"
-
-    try:
-        response = requests.get(url)
-        if response.status_code == 200:
-            data = response.json()
-            
-            # Determine TTL based on data volatility
-            if data_type in ['positions', 'car_data', 'location']:
-                ttl = 5  # Very volatile
-            elif data_type in ['weather', 'intervals']:
-                ttl = 30 # Semi-volatile
-            else:
-                ttl = 300 # More stable (drivers, laps, stints)
-                
-            set_cached_data(cache_key, data, ttl=ttl)
-            return data
-        
-        update_metric("openf1_errors")
-        if response.status_code == 429:
-            raise HTTPException(status_code=429, detail="OpenF1 Rate Limit Exceeded")
-            
-        return []
-    except Exception as e:
-        update_metric("openf1_errors")
-        raise e
+    # Only return cached data to avoid rate-limiting issues on multi-client usage
+    return []
 
 if __name__ == "__main__":
     import uvicorn
