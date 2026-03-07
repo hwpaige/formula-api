@@ -424,6 +424,7 @@ async def root(request: Request):
                         <div class="text-center py-8 text-slate-600 animate-pulse">Loading settings...</div>
                     </div>
                     <button onclick="saveIntervals()" class="w-full mt-6 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-4 rounded-xl transition-all">Save All Intervals</button>
+                    <button onclick="isUserAdjustingIntervals = false; loadRefreshControls()" class="w-full mt-2 bg-slate-800 hover:bg-slate-700 text-slate-400 font-bold py-2 px-4 rounded-xl transition-all text-xs">Reset Changes</button>
                 </div>
             </div>
             
@@ -785,6 +786,7 @@ curl "https://f1-buddy-api.herokuapp.com/sessions?meeting_key=1234"</pre>
         }
 
         let refreshTimers = {};
+        let isUserAdjustingIntervals = false;
         function renderTimers(data) {
             const list = document.getElementById('refresh-timers-list');
             let html = '';
@@ -858,6 +860,7 @@ curl "https://f1-buddy-api.herokuapp.com/sessions?meeting_key=1234"</pre>
         setInterval(updateCountdownDisplays, 1000);
 
         function renderIntervalSettings(intervals) {
+            if (isUserAdjustingIntervals) return;
             const form = document.getElementById('interval-settings-form');
             let html = '<div class="grid grid-cols-1 gap-4">';
             
@@ -870,7 +873,7 @@ curl "https://f1-buddy-api.herokuapp.com/sessions?meeting_key=1234"</pre>
                             <span class="text-[10px] font-mono text-slate-400" id="val-${key}">${intervals[key]}s</span>
                         </div>
                         <input type="range" id="input-${key}" min="5" max="3600" step="5" value="${intervals[key]}" 
-                               oninput="document.getElementById('val-${key}').textContent = this.value + 's'"
+                               oninput="isUserAdjustingIntervals = true; document.getElementById('val-${key}').textContent = this.value + 's'"
                                class="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500">
                     </div>
                 `;
@@ -895,6 +898,7 @@ curl "https://f1-buddy-api.herokuapp.com/sessions?meeting_key=1234"</pre>
                 });
                 if (resp.ok) {
                     alert('Intervals updated successfully!');
+                    isUserAdjustingIntervals = false;
                     loadRefreshControls();
                 } else {
                     alert('Failed to update intervals');
