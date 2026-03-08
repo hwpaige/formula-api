@@ -392,12 +392,13 @@ async def root(request: Request):
                             <i data-lucide="flag" class="text-blue-500 w-5 h-5"></i>
                             Recent Laps
                         </h3>
-                        <div id="session-laps-summary" class="overflow-x-auto">
+                        <div id="session-laps-summary" class="overflow-x-auto max-h-[400px] overflow-y-auto pr-2">
                             <table class="w-full text-left text-sm">
-                                <thead class="text-slate-500 border-b border-slate-800 font-bold uppercase text-[9px] tracking-wider">
+                                <thead class="text-slate-500 border-b border-slate-800 font-bold uppercase text-[9px] tracking-wider sticky top-0 bg-slate-900 z-10">
                                     <tr>
                                         <th class="pb-2 px-1 text-center">Driver</th>
                                         <th class="pb-2 px-1">Lap</th>
+                                        <th class="pb-2 px-1">Start Time</th>
                                         <th class="pb-2 px-1">Time</th>
                                         <th class="pb-2 px-1">S1</th>
                                         <th class="pb-2 px-1">S2</th>
@@ -405,7 +406,7 @@ async def root(request: Request):
                                     </tr>
                                 </thead>
                                 <tbody id="session-laps-body" class="divide-y divide-slate-800/50 text-slate-300">
-                                    <tr><td colspan="6" class="py-8 text-center text-slate-600 italic">No lap data available.</td></tr>
+                                    <tr><td colspan="7" class="py-8 text-center text-slate-600 italic">No lap data available.</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -542,15 +543,29 @@ async def root(request: Request):
                             <i data-lucide="info" class="text-amber-500 w-5 h-5"></i>
                             Session Status
                         </h3>
-                        <div class="space-y-3 text-sm" id="session-status-info">
-                            <div class="flex justify-between py-2 border-b border-slate-800">
-                                <span class="text-slate-500">Live Telemetry</span>
-                                <span class="text-slate-300 font-mono">Available</span>
+                        <div class="space-y-1 text-sm" id="session-status-info">
+                            <!-- Status metrics will be injected here -->
+                        </div>
+                    </div>
+
+                    <!-- New Logging Section -->
+                    <div class="bg-slate-900/50 border border-slate-800 rounded-2xl p-6 flex flex-col h-[400px]">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-lg font-bold flex items-center gap-2">
+                                <i data-lucide="terminal" class="text-blue-400 w-5 h-5"></i>
+                                Session Logs
+                            </h3>
+                            <div class="flex gap-2">
+                                <button onclick="copyLogs()" class="p-1.5 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition-all" title="Copy Logs">
+                                    <i data-lucide="copy" class="w-4 h-4"></i>
+                                </button>
+                                <button onclick="clearLogs()" class="p-1.5 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition-all" title="Clear Logs">
+                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                </button>
                             </div>
-                            <div class="flex justify-between py-2">
-                                <span class="text-slate-500">Track Position</span>
-                                <span class="text-slate-300 font-mono">Cached</span>
-                            </div>
+                        </div>
+                        <div id="session-logs-container" class="flex-1 bg-slate-950 rounded-xl border border-slate-800 p-3 font-mono text-[10px] overflow-y-auto space-y-1 custom-scrollbar">
+                            <div class="text-slate-600 italic">No logs yet. Data fetching will be logged here.</div>
                         </div>
                     </div>
                 </div>
@@ -1279,6 +1294,48 @@ curl "https://formula-e7c5d4e4cf7d.herokuapp.com/sessions?meeting_key=1234"</pre
 
 
         let currentSessionKey = null;
+        let sessionLogs = [];
+
+        function addLog(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            const log = { timestamp, message, type };
+            sessionLogs.push(log);
+            
+            // Keep last 100 logs
+            if (sessionLogs.length > 100) sessionLogs.shift();
+            
+            const container = document.getElementById('session-logs-container');
+            if (!container) return;
+
+            let colorClass = 'text-slate-400';
+            if (type === 'error') colorClass = 'text-red-400';
+            else if (type === 'warn') colorClass = 'text-amber-400';
+            else if (type === 'success') colorClass = 'text-emerald-400';
+
+            const logHtml = `
+                <div class="flex gap-2">
+                    <span class="text-slate-600 shrink-0">[${timestamp}]</span>
+                    <span class="${colorClass}">${message}</span>
+                </div>
+            `;
+            
+            if (sessionLogs.length === 1) container.innerHTML = '';
+            container.innerHTML += logHtml;
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function clearLogs() {
+            sessionLogs = [];
+            const container = document.getElementById('session-logs-container');
+            if (container) container.innerHTML = '<div class="text-slate-600 italic">Logs cleared.</div>';
+        }
+
+        function copyLogs() {
+            const text = sessionLogs.map(l => `[${l.timestamp}] ${l.type.toUpperCase()}: ${l.message}`).join('\n');
+            navigator.clipboard.writeText(text).then(() => {
+                alert('Logs copied to clipboard');
+            });
+        }
 
         async function seedYear() {
             const year = document.getElementById('calendar-year-select').value;
@@ -1334,6 +1391,7 @@ curl "https://formula-e7c5d4e4cf7d.herokuapp.com/sessions?meeting_key=1234"</pre
 
         async function viewSessionData(sessionKey) {
             currentSessionKey = sessionKey;
+            addLog(`Viewing session ${sessionKey}`, 'info');
             // Save to localStorage
             localStorage.setItem('f1_active_session', sessionKey);
             localStorage.setItem('f1_active_tab', 'session_detail');
@@ -1356,6 +1414,7 @@ curl "https://formula-e7c5d4e4cf7d.herokuapp.com/sessions?meeting_key=1234"</pre
             document.getElementById('session-location-info').innerHTML = '<div class="text-center py-10 text-slate-600 animate-pulse text-[10px] font-bold uppercase tracking-widest">Fetching Location...</div>';
 
             try {
+                addLog(`Fetching details for session ${sessionKey}...`, 'info');
                 // Fetch basic session info to update title
                 const sResp = await fetch(`/sessions?session_key=${sessionKey}`);
                 const sessionData = await sResp.json();
@@ -1364,6 +1423,7 @@ curl "https://formula-e7c5d4e4cf7d.herokuapp.com/sessions?meeting_key=1234"</pre
                 }
 
                 // Parallel fetch for details
+                addLog('Requesting all data types in parallel...', 'info');
                 const [dResp, wResp, lResp, stResp, pResp, rResp, rcResp, iResp, locResp, posResp, carResp] = await Promise.all([
                     fetch(`/drivers?session_key=${sessionKey}`),
                     fetch(`/weather?session_key=${sessionKey}`),
@@ -1378,6 +1438,13 @@ curl "https://formula-e7c5d4e4cf7d.herokuapp.com/sessions?meeting_key=1234"</pre
                     fetch(`/car_data?session_key=${sessionKey}`)
                 ]);
 
+                const responses = [dResp, wResp, lResp, stResp, pResp, rResp, rcResp, iResp, locResp, posResp, carResp];
+                const types = ['drivers', 'weather', 'laps', 'stints', 'pit', 'team_radio', 'race_control', 'intervals', 'location', 'positions', 'car_data'];
+                
+                responses.forEach((r, i) => {
+                    if (!r.ok) addLog(`Failed to fetch ${types[i]}: ${r.status} ${r.statusText}`, 'error');
+                });
+
                 const [drivers, weather, laps, stints, pits, radio, raceControl, intervals, location, positions, carData] = await Promise.all([
                     dResp.json(),
                     wResp.json(),
@@ -1391,6 +1458,15 @@ curl "https://formula-e7c5d4e4cf7d.herokuapp.com/sessions?meeting_key=1234"</pre
                     posResp.json(),
                     carResp.json()
                 ]);
+
+                const dataObjects = [drivers, weather, laps, stints, pits, radio, raceControl, intervals, location, positions, carData];
+                dataObjects.forEach((d, i) => {
+                    if (d && d.length > 0) {
+                        addLog(`Successfully loaded ${d.length} items for ${types[i]}`, 'success');
+                    } else {
+                        addLog(`No data found for ${types[i]}`, 'warn');
+                    }
+                });
 
                 // Update Drivers
                 if (!drivers || drivers.length === 0) {
@@ -1449,18 +1525,20 @@ curl "https://formula-e7c5d4e4cf7d.herokuapp.com/sessions?meeting_key=1234"</pre
                     `;
                 }
 
-                // Update Laps (show top 20 latest laps)
+                // Update Laps (show all laps with scroll)
                 if (!laps || laps.length === 0) {
-                    document.getElementById('session-laps-body').innerHTML = '<tr><td colspan="6" class="py-8 text-center text-slate-600 italic">No lap data found.</td></tr>';
+                    document.getElementById('session-laps-body').innerHTML = '<tr><td colspan="7" class="py-8 text-center text-slate-600 italic">No lap data found.</td></tr>';
                 } else {
                     laps.sort((a,b) => b.lap_number - a.lap_number);
                     let lHtml = '';
-                    laps.slice(0, 15).forEach(l => {
+                    laps.forEach(l => {
                         const timeStr = l.lap_duration ? l.lap_duration.toFixed(3) : '-';
+                        const startTime = l.date_start ? new Date(l.date_start).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'}) : '-';
                         lHtml += `
                             <tr class="hover:bg-slate-800/20 transition-all border-b border-slate-900/50">
                                 <td class="py-1.5 px-1 text-center font-bold text-slate-500 text-xs">${l.driver_number}</td>
                                 <td class="py-1.5 px-1 font-mono text-[10px] text-slate-400">${l.lap_number}</td>
+                                <td class="py-1.5 px-1 font-mono text-[10px] text-slate-500">${startTime}</td>
                                 <td class="py-1.5 px-1 font-bold text-white text-xs">${timeStr}</td>
                                 <td class="py-1.5 px-1 text-[10px] text-slate-500">${l.duration_sector_1 ? l.duration_sector_1.toFixed(2) : '-'}</td>
                                 <td class="py-1.5 px-1 text-[10px] text-slate-500">${l.duration_sector_2 ? l.duration_sector_2.toFixed(2) : '-'}</td>
@@ -1618,6 +1696,7 @@ curl "https://formula-e7c5d4e4cf7d.herokuapp.com/sessions?meeting_key=1234"</pre
 
                 // Render Plots
                 if (positions && positions.length > 0) {
+                    addLog(`Rendering track map with ${positions.length} points`, 'info');
                     const trace = {
                         x: positions.map(p => p.x),
                         y: positions.map(p => p.y),
@@ -1639,6 +1718,7 @@ curl "https://formula-e7c5d4e4cf7d.herokuapp.com/sessions?meeting_key=1234"</pre
                 }
 
                 if (carData && carData.length > 0) {
+                    addLog(`Rendering telemetry chart for car ${carData[0].driver_number}`, 'info');
                     // Show speed for one driver (first one found)
                     const dNum = carData[0].driver_number;
                     const dData = carData.filter(c => c.driver_number === dNum).slice(-200);
@@ -1709,6 +1789,7 @@ curl "https://formula-e7c5d4e4cf7d.herokuapp.com/sessions?meeting_key=1234"</pre
 
                 lucide.createIcons();
             } catch (e) {
+                addLog(`CRITICAL ERROR: ${e.message}`, 'error');
                 console.error("Error loading session detail:", e);
                 document.getElementById('session-detail-title').textContent = "Error Loading Session";
             }
