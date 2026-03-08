@@ -406,6 +406,41 @@ async def root(request: Request):
                             </table>
                         </div>
                     </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <!-- Stints -->
+                        <div class="bg-slate-900/50 border border-slate-800 rounded-2xl p-6">
+                            <h3 class="text-lg font-bold mb-4 flex items-center gap-2">
+                                <i data-lucide="layers" class="text-purple-500 w-5 h-5"></i>
+                                Driver Stints
+                            </h3>
+                            <div id="session-stints-list" class="space-y-3">
+                                <div class="text-center py-8 text-slate-600 italic">No stint data.</div>
+                            </div>
+                        </div>
+
+                        <!-- Pit Stops -->
+                        <div class="bg-slate-900/50 border border-slate-800 rounded-2xl p-6">
+                            <h3 class="text-lg font-bold mb-4 flex items-center gap-2">
+                                <i data-lucide="wrench" class="text-amber-500 w-5 h-5"></i>
+                                Pit Stops
+                            </h3>
+                            <div id="session-pit-list" class="space-y-3">
+                                <div class="text-center py-8 text-slate-600 italic">No pit stop data.</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Team Radio -->
+                    <div class="bg-slate-900/50 border border-slate-800 rounded-2xl p-6">
+                        <h3 class="text-lg font-bold mb-4 flex items-center gap-2">
+                            <i data-lucide="radio" class="text-red-500 w-5 h-5"></i>
+                            Team Radio
+                        </h3>
+                        <div id="session-radio-list" class="space-y-4 max-h-[400px] overflow-y-auto pr-2">
+                            <div class="text-center py-8 text-slate-600 italic">No radio messages.</div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Right Column: Data Management -->
@@ -859,13 +894,34 @@ curl "https://formula-e7c5d4e4cf7d.herokuapp.com/sessions?meeting_key=1234"</pre
             document.querySelectorAll('[id^="tab-"]').forEach(el => el.classList.add('text-slate-500'));
             
             document.getElementById('content-' + tabId).classList.remove('hidden');
-            document.getElementById('tab-' + tabId).classList.add('tab-active', 'text-slate-200');
-            document.getElementById('tab-' + tabId).classList.remove('text-slate-500');
+            const tabBtn = document.getElementById('tab-' + tabId);
+            if (tabBtn) {
+                tabBtn.classList.add('tab-active', 'text-slate-200');
+                tabBtn.classList.remove('text-slate-500');
+            }
+
+            // Save tab to localStorage
+            localStorage.setItem('f1_active_tab', tabId);
 
             if (tabId === 'cache') refreshCacheKeys();
             if (tabId === 'calendar') refreshCalendar();
             if (tabId === 'refresh') loadRefreshControls();
         }
+
+        // Restore tab on load
+        window.addEventListener('DOMContentLoaded', () => {
+            const savedTab = localStorage.getItem('f1_active_tab') || 'metrics';
+            const savedSession = localStorage.getItem('f1_active_session');
+            
+            if (savedTab === 'session_detail' && savedSession) {
+                viewSessionData(savedSession);
+            } else {
+                showTab(savedTab);
+            }
+            
+            fetchMetrics();
+            setInterval(fetchMetrics, 30000);
+        });
 
         async function loadRefreshControls() {
             try {
@@ -1065,10 +1121,10 @@ curl "https://formula-e7c5d4e4cf7d.herokuapp.com/sessions?meeting_key=1234"</pre
                                             Round ${m.meeting_key % 100}
                                         </div>
                                         <div class="flex items-center gap-2">
-                                            <button onclick="event.stopPropagation(); seedMeeting(${m.meeting_key})" class="p-1 hover:bg-emerald-500/10 rounded transition-all text-slate-600 hover:text-emerald-500" title="Seed Meeting (Sessions)">
+                                            <button onclick="event.stopPropagation(); seedMeeting(${m.meeting_key}).then(() => refreshCalendar())" class="p-1 hover:bg-emerald-500/10 rounded transition-all text-slate-600 hover:text-emerald-500" title="Seed Meeting (Sessions)">
                                                 <i data-lucide="database-zap" class="w-3.5 h-3.5"></i>
                                             </button>
-                                            <button onclick="event.stopPropagation(); clearMeeting(${m.meeting_key})" class="p-1 hover:bg-red-500/10 rounded transition-all text-slate-600 hover:text-red-500" title="Clear Meeting Cache">
+                                            <button onclick="event.stopPropagation(); clearMeeting(${m.meeting_key}).then(() => refreshCalendar())" class="p-1 hover:bg-red-500/10 rounded transition-all text-slate-600 hover:text-red-500" title="Clear Meeting Cache">
                                                 <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
                                             </button>
                                             <div class="text-slate-500 text-xs font-mono font-bold ml-1">${dateStr}</div>
@@ -1078,15 +1134,17 @@ curl "https://formula-e7c5d4e4cf7d.herokuapp.com/sessions?meeting_key=1234"</pre
                                     <p class="text-slate-500 text-sm mb-4">${m.location}, ${m.country_name}</p>
                                     
                                     <div id="sessions-container-${m.meeting_key}" class="space-y-2 mt-4 pt-4 border-t border-slate-800/50">
-                                        <button onclick="loadSessionsForMeeting(${m.meeting_key})" class="w-full py-2 bg-slate-950 border border-slate-800 rounded-xl text-[10px] font-bold uppercase tracking-widest text-slate-500 hover:text-red-500 transition-all">
-                                            Fetch Sessions
-                                        </button>
+                                        <div class="text-center py-4 animate-pulse"><div class="w-4 h-4 bg-red-500/20 rounded-full mx-auto"></div></div>
                                     </div>
                                 </div>
                             </div>
                         `;
                     });
                     listEl.innerHTML = html;
+                    lucide.createIcons();
+                    
+                    // Trigger check for cached sessions
+                    meetings.forEach(m => checkCachedSessions(m.meeting_key));
                 }
             } catch (e) {
                 listEl.innerHTML = `<div class="col-span-full py-20 text-center text-red-400">Failed to load calendar: ${e.message}</div>`;
@@ -1096,40 +1154,66 @@ curl "https://formula-e7c5d4e4cf7d.herokuapp.com/sessions?meeting_key=1234"</pre
             }
         }
 
+        async function checkCachedSessions(mKey) {
+            const container = document.getElementById(`sessions-container-${mKey}`);
+            try {
+                const resp = await fetch(`/sessions?meeting_key=${mKey}`);
+                const sessions = await resp.json();
+                
+                if (sessions && sessions.length > 0) {
+                    renderSessionsList(mKey, sessions);
+                } else {
+                    container.innerHTML = `
+                        <button onclick="loadSessionsForMeeting(${mKey})" class="w-full py-2 bg-slate-950 border border-slate-800 rounded-xl text-[10px] font-bold uppercase tracking-widest text-slate-500 hover:text-red-500 transition-all">
+                            Fetch Sessions
+                        </button>
+                    `;
+                }
+            } catch (e) {
+                console.error("Cache check failed:", e);
+            }
+        }
+
+        function renderSessionsList(mKey, sessions) {
+            const container = document.getElementById(`sessions-container-${mKey}`);
+            sessions.sort((a, b) => new Date(a.date_start) - new Date(b.date_start));
+            let html = '<div class="space-y-2">';
+            sessions.forEach(s => {
+                html += `
+                    <div class="p-3 bg-slate-950/50 border border-slate-800 rounded-xl hover:border-slate-700 transition-all cursor-pointer group/session" onclick="viewSessionData(${s.session_key})">
+                        <div class="flex justify-between items-center">
+                            <div>
+                                <div class="text-xs font-bold text-slate-200 group-hover/session:text-red-400 transition-colors">${s.session_name}</div>
+                                <div class="text-[9px] text-slate-500 font-mono">${new Date(s.date_start).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
+                            </div>
+                            <i data-lucide="chevron-right" class="w-3.5 h-3.5 text-slate-700 group-hover/session:text-red-500 transition-all"></i>
+                        </div>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            container.innerHTML = html;
+            lucide.createIcons();
+        }
+
         async function loadSessionsForMeeting(mKey) {
             const container = document.getElementById(`sessions-container-${mKey}`);
-            container.innerHTML = '<div class="text-center py-4 animate-pulse"><div class="w-4 h-4 bg-red-500 rounded-full mx-auto"></div></div>';
+            container.innerHTML = '<div class="text-center py-4 animate-pulse"><div class="w-4 h-4 bg-red-500 rounded-full mx-auto"></div><div class="text-[8px] font-black uppercase text-red-500 mt-2 tracking-widest">Seeding Cache...</div></div>';
             
             try {
+                // First, seed the meeting (fetch sessions from OpenF1)
+                const seedResp = await fetch(`/seed/meeting/${mKey}`, { method: 'POST' });
+                
+                // Then fetch the sessions from our cache
                 const resp = await fetch(`/sessions?meeting_key=${mKey}`);
                 const sessions = await resp.json();
                 
                 if (!sessions || sessions.length === 0) {
                     container.innerHTML = `
-                        <div class="text-[10px] text-slate-500 italic py-2">No sessions in cache.</div>
-                        <button onclick="seedMeeting(${mKey}).then(() => loadSessionsForMeeting(${mKey}))" class="w-full py-2 bg-slate-950 border border-slate-800 rounded-xl text-[10px] font-bold uppercase tracking-widest text-emerald-500 hover:bg-emerald-500/10 transition-all">
-                            Pull Sessions
-                        </button>
+                        <div class="text-[10px] text-slate-500 italic py-2">No sessions found for this meeting.</div>
                     `;
                 } else {
-                    sessions.sort((a, b) => new Date(a.date_start) - new Date(b.date_start));
-                    let html = '<div class="space-y-2">';
-                    sessions.forEach(s => {
-                        html += `
-                            <div class="p-3 bg-slate-950/50 border border-slate-800 rounded-xl hover:border-slate-700 transition-all cursor-pointer group/session" onclick="viewSessionData(${s.session_key})">
-                                <div class="flex justify-between items-center">
-                                    <div>
-                                        <div class="text-xs font-bold text-slate-200 group-hover/session:text-red-400 transition-colors">${s.session_name}</div>
-                                        <div class="text-[9px] text-slate-500 font-mono">${new Date(s.date_start).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
-                                    </div>
-                                    <i data-lucide="chevron-right" class="w-3.5 h-3.5 text-slate-700 group-hover/session:text-red-500 transition-all"></i>
-                                </div>
-                            </div>
-                        `;
-                    });
-                    html += '</div>';
-                    container.innerHTML = html;
-                    lucide.createIcons();
+                    renderSessionsList(mKey, sessions);
                 }
             } catch (e) {
                 container.innerHTML = `<div class="text-[10px] text-red-500 py-2">Error: ${e.message}</div>`;
@@ -1193,6 +1277,10 @@ curl "https://formula-e7c5d4e4cf7d.herokuapp.com/sessions?meeting_key=1234"</pre
 
         async function viewSessionData(sessionKey) {
             currentSessionKey = sessionKey;
+            // Save to localStorage
+            localStorage.setItem('f1_active_session', sessionKey);
+            localStorage.setItem('f1_active_tab', 'session_detail');
+            
             // Show session detail tab
             document.getElementById('tab-session_detail').classList.remove('hidden');
             showTab('session_detail');
@@ -1203,6 +1291,9 @@ curl "https://formula-e7c5d4e4cf7d.herokuapp.com/sessions?meeting_key=1234"</pre
             document.getElementById('session-drivers-list').innerHTML = '<div class="col-span-full text-center py-20 text-slate-600 animate-pulse text-[10px] font-bold uppercase tracking-widest">Fetching Drivers...</div>';
             document.getElementById('session-laps-body').innerHTML = '<tr><td colspan="6" class="py-20 text-center text-slate-600 animate-pulse text-[10px] font-bold uppercase tracking-widest">Fetching Lap Data...</td></tr>';
             document.getElementById('session-weather-info').innerHTML = '<div class="text-center py-20 text-slate-600 animate-pulse text-[10px] font-bold uppercase tracking-widest">Fetching Weather...</div>';
+            document.getElementById('session-stints-list').innerHTML = '<div class="text-center py-10 text-slate-600 animate-pulse text-[10px] font-bold uppercase tracking-widest">Fetching Stints...</div>';
+            document.getElementById('session-pit-list').innerHTML = '<div class="text-center py-10 text-slate-600 animate-pulse text-[10px] font-bold uppercase tracking-widest">Fetching Pit Stops...</div>';
+            document.getElementById('session-radio-list').innerHTML = '<div class="text-center py-10 text-slate-600 animate-pulse text-[10px] font-bold uppercase tracking-widest">Fetching Radio...</div>';
 
             try {
                 // Fetch basic session info to update title
@@ -1213,16 +1304,22 @@ curl "https://formula-e7c5d4e4cf7d.herokuapp.com/sessions?meeting_key=1234"</pre
                 }
 
                 // Parallel fetch for details
-                const [dResp, wResp, lResp] = await Promise.all([
+                const [dResp, wResp, lResp, stResp, pResp, rResp] = await Promise.all([
                     fetch(`/drivers?session_key=${sessionKey}`),
                     fetch(`/weather?session_key=${sessionKey}`),
-                    fetch(`/laps?session_key=${sessionKey}`)
+                    fetch(`/laps?session_key=${sessionKey}`),
+                    fetch(`/stints?session_key=${sessionKey}`),
+                    fetch(`/pit?session_key=${sessionKey}`),
+                    fetch(`/team_radio?session_key=${sessionKey}`)
                 ]);
 
-                const [drivers, weather, laps] = await Promise.all([
+                const [drivers, weather, laps, stints, pits, radio] = await Promise.all([
                     dResp.json(),
                     wResp.json(),
-                    lResp.json()
+                    lResp.json(),
+                    stResp.json(),
+                    pResp.json(),
+                    rResp.json()
                 ]);
 
                 // Update Drivers
@@ -1299,6 +1396,99 @@ curl "https://formula-e7c5d4e4cf7d.herokuapp.com/sessions?meeting_key=1234"</pre
                     });
                     document.getElementById('session-laps-body').innerHTML = lHtml;
                 }
+
+                // Update Stints
+                if (!stints || stints.length === 0) {
+                    document.getElementById('session-stints-list').innerHTML = '<div class="text-center py-8 text-slate-600 italic">No stint data available.</div>';
+                } else {
+                    let stHtml = '';
+                    stints.sort((a,b) => b.stint_number - a.stint_number).slice(0, 10).forEach(s => {
+                        stHtml += `
+                            <div class="flex items-center justify-between p-3 bg-slate-950 border border-slate-800 rounded-xl">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-8 h-8 rounded-full bg-purple-500/10 flex items-center justify-center text-purple-500 font-bold text-xs">${s.driver_number}</div>
+                                    <div>
+                                        <div class="text-xs font-bold text-slate-200">Stint ${s.stint_number}</div>
+                                        <div class="text-[10px] text-slate-500 uppercase font-bold">${s.compound} (${s.tyre_age_at_start} laps old)</div>
+                                    </div>
+                                </div>
+                                <div class="text-xs font-mono text-slate-400">Lap ${s.lap_start} → ${s.lap_end || '?'}</div>
+                            </div>
+                        `;
+                    });
+                    document.getElementById('session-stints-list').innerHTML = stHtml;
+                }
+
+                // Update Pit Stops
+                if (!pits || pits.length === 0) {
+                    document.getElementById('session-pit-list').innerHTML = '<div class="text-center py-8 text-slate-600 italic">No pit stops recorded.</div>';
+                } else {
+                    let pHtml = '';
+                    pits.sort((a,b) => b.lap_number - a.lap_number).slice(0, 10).forEach(p => {
+                        pHtml += `
+                            <div class="flex items-center justify-between p-3 bg-slate-950 border border-slate-800 rounded-xl">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-8 h-8 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-500 font-bold text-xs">${p.driver_number}</div>
+                                    <div class="text-xs font-bold text-slate-200">Lap ${p.lap_number}</div>
+                                </div>
+                                <div class="text-sm font-bold text-white">${p.pit_duration ? p.pit_duration.toFixed(2) + 's' : 'In Pit'}</div>
+                            </div>
+                        `;
+                    });
+                    document.getElementById('session-pit-list').innerHTML = pHtml;
+                }
+
+                // Update Radio
+                if (!radio || radio.length === 0) {
+                    document.getElementById('session-radio-list').innerHTML = '<div class="text-center py-8 text-slate-600 italic">No radio messages captured.</div>';
+                } else {
+                    let rHtml = '';
+                    radio.sort((a,b) => new Date(b.date) - new Date(a.date)).slice(0, 15).forEach(r => {
+                        rHtml += `
+                            <div class="p-3 bg-slate-950 border border-slate-800 rounded-xl space-y-2">
+                                <div class="flex justify-between items-center">
+                                    <div class="flex items-center gap-2">
+                                        <div class="px-2 py-0.5 bg-red-500/10 text-red-500 rounded text-[10px] font-bold uppercase">${r.driver_number}</div>
+                                        <span class="text-[10px] text-slate-500 font-mono">${new Date(r.date).toLocaleTimeString()}</span>
+                                    </div>
+                                    <a href="${r.recording_url}" target="_blank" class="p-1 hover:bg-slate-800 rounded text-slate-500 hover:text-white transition-all">
+                                        <i data-lucide="play" class="w-3.5 h-3.5"></i>
+                                    </a>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    document.getElementById('session-radio-list').innerHTML = rHtml;
+                }
+
+                // Update Status Info
+                const statusHtml = `
+                    <div class="flex justify-between py-2 border-b border-slate-800">
+                        <span class="text-slate-500 font-bold uppercase text-[10px]">Drivers</span>
+                        <span class="text-slate-300 font-mono text-xs">${drivers.length}</span>
+                    </div>
+                    <div class="flex justify-between py-2 border-b border-slate-800">
+                        <span class="text-slate-500 font-bold uppercase text-[10px]">Total Laps</span>
+                        <span class="text-slate-300 font-mono text-xs">${laps.length}</span>
+                    </div>
+                    <div class="flex justify-between py-2 border-b border-slate-800">
+                        <span class="text-slate-500 font-bold uppercase text-[10px]">Stints</span>
+                        <span class="text-slate-300 font-mono text-xs">${stints.length}</span>
+                    </div>
+                    <div class="flex justify-between py-2 border-b border-slate-800">
+                        <span class="text-slate-500 font-bold uppercase text-[10px]">Pit Stops</span>
+                        <span class="text-slate-300 font-mono text-xs">${pits.length}</span>
+                    </div>
+                    <div class="flex justify-between py-2 border-b border-slate-800">
+                        <span class="text-slate-500 font-bold uppercase text-[10px]">Radio Msgs</span>
+                        <span class="text-slate-300 font-mono text-xs">${radio.length}</span>
+                    </div>
+                    <div class="flex justify-between py-2">
+                        <span class="text-slate-500 font-bold uppercase text-[10px]">Weather Pts</span>
+                        <span class="text-slate-300 font-mono text-xs">${weather.length}</span>
+                    </div>
+                `;
+                document.getElementById('session-status-info').innerHTML = statusHtml;
 
                 lucide.createIcons();
             } catch (e) {
