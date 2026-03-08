@@ -208,6 +208,7 @@ async def root(request: Request):
     <title>F1 Buddy Proxy API Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
         body { font-family: 'Inter', sans-serif; }
@@ -381,7 +382,7 @@ async def root(request: Request):
                             <i data-lucide="users" class="text-red-500 w-5 h-5"></i>
                             Drivers in Session
                         </h3>
-                        <div id="session-drivers-list" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div id="session-drivers-list" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
                             <div class="col-span-full text-center py-8 text-slate-600 italic">No drivers found.</div>
                         </div>
                     </div>
@@ -393,14 +394,14 @@ async def root(request: Request):
                         </h3>
                         <div id="session-laps-summary" class="overflow-x-auto">
                             <table class="w-full text-left text-sm">
-                                <thead class="text-slate-500 border-b border-slate-800 font-bold uppercase text-[10px] tracking-wider">
+                                <thead class="text-slate-500 border-b border-slate-800 font-bold uppercase text-[9px] tracking-wider">
                                     <tr>
-                                        <th class="pb-3 px-2 text-center">Driver</th>
-                                        <th class="pb-3 px-2">Lap</th>
-                                        <th class="pb-3 px-2">Time</th>
-                                        <th class="pb-3 px-2">S1</th>
-                                        <th class="pb-3 px-2">S2</th>
-                                        <th class="pb-3 px-2">S3</th>
+                                        <th class="pb-2 px-1 text-center">Driver</th>
+                                        <th class="pb-2 px-1">Lap</th>
+                                        <th class="pb-2 px-1">Time</th>
+                                        <th class="pb-2 px-1">S1</th>
+                                        <th class="pb-2 px-1">S2</th>
+                                        <th class="pb-2 px-1">S3</th>
                                     </tr>
                                 </thead>
                                 <tbody id="session-laps-body" class="divide-y divide-slate-800/50 text-slate-300">
@@ -431,6 +432,59 @@ async def root(request: Request):
                             <div id="session-pit-list" class="space-y-3">
                                 <div class="text-center py-8 text-slate-600 italic">No pit stop data.</div>
                             </div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <!-- Intervals -->
+                        <div class="bg-slate-900/50 border border-slate-800 rounded-2xl p-6">
+                            <h3 class="text-lg font-bold mb-4 flex items-center gap-2">
+                                <i data-lucide="timer" class="text-blue-400 w-5 h-5"></i>
+                                Driver Intervals
+                            </h3>
+                            <div id="session-intervals-list" class="space-y-2">
+                                <div class="text-center py-8 text-slate-600 italic">No interval data.</div>
+                            </div>
+                        </div>
+
+                        <!-- Location -->
+                        <div class="bg-slate-900/50 border border-slate-800 rounded-2xl p-6">
+                            <h3 class="text-lg font-bold mb-4 flex items-center gap-2">
+                                <i data-lucide="map-pin" class="text-rose-500 w-5 h-5"></i>
+                                Circuit Info
+                            </h3>
+                            <div id="session-location-info" class="space-y-4">
+                                <div class="text-center py-8 text-slate-600 italic">No location data.</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Telemetry & Track Map -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                         <div class="bg-slate-900/50 border border-slate-800 rounded-2xl p-6 min-h-[400px]">
+                            <h3 class="text-lg font-bold mb-4 flex items-center gap-2">
+                                <i data-lucide="route" class="text-emerald-500 w-5 h-5"></i>
+                                Track Map (Positions)
+                            </h3>
+                            <div id="session-track-map" class="w-full h-[300px]"></div>
+                        </div>
+                        <div class="bg-slate-900/50 border border-slate-800 rounded-2xl p-6 min-h-[400px]">
+                            <h3 class="text-lg font-bold mb-4 flex items-center gap-2">
+                                <i data-lucide="gauge" class="text-blue-500 w-5 h-5"></i>
+                                Speed Telemetry
+                            </h3>
+                            <div id="session-telemetry-chart" class="w-full h-[300px]"></div>
+                        </div>
+                    </div>
+
+                    <!-- Race Control -->
+                    <div class="bg-slate-900/50 border border-slate-800 rounded-2xl p-6">
+                        <h3 class="text-lg font-bold mb-4 flex items-center gap-2">
+                            <i data-lucide="megaphone" class="text-orange-500 w-5 h-5"></i>
+                            Race Control Messages
+                        </h3>
+                        <div id="session-race-control-list" class="space-y-3 max-h-[300px] overflow-y-auto pr-2">
+                            <div class="text-center py-8 text-slate-600 italic">No race control messages.</div>
                         </div>
                     </div>
 
@@ -1297,6 +1351,9 @@ curl "https://formula-e7c5d4e4cf7d.herokuapp.com/sessions?meeting_key=1234"</pre
             document.getElementById('session-stints-list').innerHTML = '<div class="text-center py-10 text-slate-600 animate-pulse text-[10px] font-bold uppercase tracking-widest">Fetching Stints...</div>';
             document.getElementById('session-pit-list').innerHTML = '<div class="text-center py-10 text-slate-600 animate-pulse text-[10px] font-bold uppercase tracking-widest">Fetching Pit Stops...</div>';
             document.getElementById('session-radio-list').innerHTML = '<div class="text-center py-10 text-slate-600 animate-pulse text-[10px] font-bold uppercase tracking-widest">Fetching Radio...</div>';
+            document.getElementById('session-intervals-list').innerHTML = '<div class="text-center py-10 text-slate-600 animate-pulse text-[10px] font-bold uppercase tracking-widest">Fetching Intervals...</div>';
+            document.getElementById('session-race-control-list').innerHTML = '<div class="text-center py-10 text-slate-600 animate-pulse text-[10px] font-bold uppercase tracking-widest">Fetching Race Control...</div>';
+            document.getElementById('session-location-info').innerHTML = '<div class="text-center py-10 text-slate-600 animate-pulse text-[10px] font-bold uppercase tracking-widest">Fetching Location...</div>';
 
             try {
                 // Fetch basic session info to update title
@@ -1307,22 +1364,32 @@ curl "https://formula-e7c5d4e4cf7d.herokuapp.com/sessions?meeting_key=1234"</pre
                 }
 
                 // Parallel fetch for details
-                const [dResp, wResp, lResp, stResp, pResp, rResp] = await Promise.all([
+                const [dResp, wResp, lResp, stResp, pResp, rResp, rcResp, iResp, locResp, posResp, carResp] = await Promise.all([
                     fetch(`/drivers?session_key=${sessionKey}`),
                     fetch(`/weather?session_key=${sessionKey}`),
                     fetch(`/laps?session_key=${sessionKey}`),
                     fetch(`/stints?session_key=${sessionKey}`),
                     fetch(`/pit?session_key=${sessionKey}`),
-                    fetch(`/team_radio?session_key=${sessionKey}`)
+                    fetch(`/team_radio?session_key=${sessionKey}`),
+                    fetch(`/race_control?session_key=${sessionKey}`),
+                    fetch(`/intervals?session_key=${sessionKey}`),
+                    fetch(`/location?session_key=${sessionKey}`),
+                    fetch(`/positions?session_key=${sessionKey}`),
+                    fetch(`/car_data?session_key=${sessionKey}`)
                 ]);
 
-                const [drivers, weather, laps, stints, pits, radio] = await Promise.all([
+                const [drivers, weather, laps, stints, pits, radio, raceControl, intervals, location, positions, carData] = await Promise.all([
                     dResp.json(),
                     wResp.json(),
                     lResp.json(),
                     stResp.json(),
                     pResp.json(),
-                    rResp.json()
+                    rResp.json(),
+                    rcResp.json(),
+                    iResp.json(),
+                    locResp.json(),
+                    posResp.json(),
+                    carResp.json()
                 ]);
 
                 // Update Drivers
@@ -1333,14 +1400,14 @@ curl "https://formula-e7c5d4e4cf7d.herokuapp.com/sessions?meeting_key=1234"</pre
                     drivers.sort((a,b) => a.driver_number - b.driver_number).forEach(d => {
                         const teamColor = d.team_colour ? `#${d.team_colour}` : '#334155';
                         dHtml += `
-                            <div class="flex items-center gap-4 p-3 bg-slate-950 border border-slate-800 rounded-xl">
-                                <div class="w-1.5 h-10 rounded-full" style="background-color: ${teamColor}"></div>
-                                <div class="flex-shrink-0 w-8 text-lg font-black text-slate-600">${d.driver_number}</div>
-                                <div class="flex-1">
-                                    <div class="text-sm font-bold text-slate-200">${d.broadcast_name}</div>
-                                    <div class="text-[10px] text-slate-500 font-bold uppercase">${d.team_name}</div>
+                            <div class="flex items-center gap-2 p-1.5 bg-slate-950 border border-slate-800 rounded-lg">
+                                <div class="w-1 h-6 rounded-full flex-shrink-0" style="background-color: ${teamColor}"></div>
+                                <div class="text-xs font-black text-slate-600 w-5">${d.driver_number}</div>
+                                <div class="flex-1 min-w-0">
+                                    <div class="text-[11px] font-bold text-slate-200 truncate">${d.broadcast_name}</div>
+                                    <div class="text-[8px] text-slate-500 font-bold uppercase truncate">${d.team_name}</div>
                                 </div>
-                                <div class="text-xs font-mono text-slate-600">${d.name_acronym}</div>
+                                <div class="text-[10px] font-mono text-slate-600 pr-1">${d.name_acronym}</div>
                             </div>
                         `;
                     });
@@ -1353,27 +1420,31 @@ curl "https://formula-e7c5d4e4cf7d.herokuapp.com/sessions?meeting_key=1234"</pre
                 } else {
                     const latest = weather[weather.length - 1];
                     document.getElementById('session-weather-info').innerHTML = `
-                        <div class="grid grid-cols-2 gap-4">
-                            <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 text-center">
-                                <div class="text-[10px] text-slate-500 uppercase font-bold mb-1">Air Temp</div>
-                                <div class="text-xl font-bold text-white">${latest.air_temperature}°C</div>
+                        <div class="grid grid-cols-3 gap-2">
+                            <div class="bg-slate-950 p-2 rounded-lg border border-slate-800 text-center">
+                                <div class="text-[8px] text-slate-500 uppercase font-bold">Air Temp</div>
+                                <div class="text-sm font-bold text-white">${latest.air_temperature}°C</div>
                             </div>
-                            <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 text-center">
-                                <div class="text-[10px] text-slate-500 uppercase font-bold mb-1">Track Temp</div>
-                                <div class="text-xl font-bold text-white">${latest.track_temperature}°C</div>
+                            <div class="bg-slate-950 p-2 rounded-lg border border-slate-800 text-center">
+                                <div class="text-[8px] text-slate-500 uppercase font-bold">Track Temp</div>
+                                <div class="text-sm font-bold text-white">${latest.track_temperature}°C</div>
                             </div>
-                            <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 text-center">
-                                <div class="text-[10px] text-slate-500 uppercase font-bold mb-1">Humidity</div>
-                                <div class="text-xl font-bold text-white">${latest.humidity}%</div>
+                            <div class="bg-slate-950 p-2 rounded-lg border border-slate-800 text-center">
+                                <div class="text-[8px] text-slate-500 uppercase font-bold">Humidity</div>
+                                <div class="text-sm font-bold text-white">${latest.humidity}%</div>
                             </div>
-                            <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 text-center">
-                                <div class="text-[10px] text-slate-500 uppercase font-bold mb-1">Rain</div>
-                                <div class="text-xl font-bold ${latest.rainfall ? 'text-blue-400' : 'text-slate-500'}">${latest.rainfall ? 'Yes' : 'No'}</div>
+                            <div class="bg-slate-950 p-2 rounded-lg border border-slate-800 text-center">
+                                <div class="text-[8px] text-slate-500 uppercase font-bold">Rain</div>
+                                <div class="text-sm font-bold ${latest.rainfall ? 'text-blue-400' : 'text-slate-500'}">${latest.rainfall ? 'Yes' : 'No'}</div>
                             </div>
-                        </div>
-                        <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 flex justify-between items-center">
-                             <div class="text-[10px] text-slate-500 uppercase font-bold">Wind Speed</div>
-                             <div class="text-sm font-bold text-white">${latest.wind_speed} m/s</div>
+                            <div class="bg-slate-950 p-2 rounded-lg border border-slate-800 text-center">
+                                <div class="text-[8px] text-slate-500 uppercase font-bold">Wind Speed</div>
+                                <div class="text-sm font-bold text-white">${latest.wind_speed}m/s</div>
+                            </div>
+                            <div class="bg-slate-950 p-2 rounded-lg border border-slate-800 text-center">
+                                <div class="text-[8px] text-slate-500 uppercase font-bold">Wind Dir</div>
+                                <div class="text-sm font-bold text-white">${latest.wind_direction}°</div>
+                            </div>
                         </div>
                     `;
                 }
@@ -1384,16 +1455,16 @@ curl "https://formula-e7c5d4e4cf7d.herokuapp.com/sessions?meeting_key=1234"</pre
                 } else {
                     laps.sort((a,b) => b.lap_number - a.lap_number);
                     let lHtml = '';
-                    laps.slice(0, 20).forEach(l => {
+                    laps.slice(0, 15).forEach(l => {
                         const timeStr = l.lap_duration ? l.lap_duration.toFixed(3) : '-';
                         lHtml += `
-                            <tr class="hover:bg-slate-800/20 transition-all">
-                                <td class="py-3 px-2 text-center font-bold text-slate-500">${l.driver_number}</td>
-                                <td class="py-3 px-2 font-mono text-xs">${l.lap_number}</td>
-                                <td class="py-3 px-2 font-bold text-white">${timeStr}</td>
-                                <td class="py-3 px-2 text-xs text-slate-500">${l.duration_sector_1 ? l.duration_sector_1.toFixed(2) : '-'}</td>
-                                <td class="py-3 px-2 text-xs text-slate-500">${l.duration_sector_2 ? l.duration_sector_2.toFixed(2) : '-'}</td>
-                                <td class="py-3 px-2 text-xs text-slate-500">${l.duration_sector_3 ? l.duration_sector_3.toFixed(2) : '-'}</td>
+                            <tr class="hover:bg-slate-800/20 transition-all border-b border-slate-900/50">
+                                <td class="py-1.5 px-1 text-center font-bold text-slate-500 text-xs">${l.driver_number}</td>
+                                <td class="py-1.5 px-1 font-mono text-[10px] text-slate-400">${l.lap_number}</td>
+                                <td class="py-1.5 px-1 font-bold text-white text-xs">${timeStr}</td>
+                                <td class="py-1.5 px-1 text-[10px] text-slate-500">${l.duration_sector_1 ? l.duration_sector_1.toFixed(2) : '-'}</td>
+                                <td class="py-1.5 px-1 text-[10px] text-slate-500">${l.duration_sector_2 ? l.duration_sector_2.toFixed(2) : '-'}</td>
+                                <td class="py-1.5 px-1 text-[10px] text-slate-500">${l.duration_sector_3 ? l.duration_sector_3.toFixed(2) : '-'}</td>
                             </tr>
                         `;
                     });
@@ -1405,17 +1476,17 @@ curl "https://formula-e7c5d4e4cf7d.herokuapp.com/sessions?meeting_key=1234"</pre
                     document.getElementById('session-stints-list').innerHTML = '<div class="text-center py-8 text-slate-600 italic">No stint data available.</div>';
                 } else {
                     let stHtml = '';
-                    stints.sort((a,b) => b.stint_number - a.stint_number).slice(0, 10).forEach(s => {
+                    stints.sort((a,b) => b.stint_number - a.stint_number).slice(0, 15).forEach(s => {
                         stHtml += `
-                            <div class="flex items-center justify-between p-3 bg-slate-950 border border-slate-800 rounded-xl">
-                                <div class="flex items-center gap-3">
-                                    <div class="w-8 h-8 rounded-full bg-purple-500/10 flex items-center justify-center text-purple-500 font-bold text-xs">${s.driver_number}</div>
+                            <div class="flex items-center justify-between p-2 bg-slate-950 border border-slate-800 rounded-lg">
+                                <div class="flex items-center gap-2">
+                                    <div class="w-6 h-6 rounded-full bg-purple-500/10 flex items-center justify-center text-purple-500 font-bold text-[10px]">${s.driver_number}</div>
                                     <div>
-                                        <div class="text-xs font-bold text-slate-200">Stint ${s.stint_number}</div>
-                                        <div class="text-[10px] text-slate-500 uppercase font-bold">${s.compound} (${s.tyre_age_at_start} laps old)</div>
+                                        <div class="text-[10px] font-bold text-slate-200">Stint ${s.stint_number}</div>
+                                        <div class="text-[8px] text-slate-500 uppercase font-bold">${s.compound} (${s.tyre_age_at_start} laps old)</div>
                                     </div>
                                 </div>
-                                <div class="text-xs font-mono text-slate-400">Lap ${s.lap_start} → ${s.lap_end || '?'}</div>
+                                <div class="text-[10px] font-mono text-slate-400">Lap ${s.lap_start} → ${s.lap_end || '?'}</div>
                             </div>
                         `;
                     });
@@ -1427,14 +1498,14 @@ curl "https://formula-e7c5d4e4cf7d.herokuapp.com/sessions?meeting_key=1234"</pre
                     document.getElementById('session-pit-list').innerHTML = '<div class="text-center py-8 text-slate-600 italic">No pit stops recorded.</div>';
                 } else {
                     let pHtml = '';
-                    pits.sort((a,b) => b.lap_number - a.lap_number).slice(0, 10).forEach(p => {
+                    pits.sort((a,b) => b.lap_number - a.lap_number).slice(0, 15).forEach(p => {
                         pHtml += `
-                            <div class="flex items-center justify-between p-3 bg-slate-950 border border-slate-800 rounded-xl">
-                                <div class="flex items-center gap-3">
-                                    <div class="w-8 h-8 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-500 font-bold text-xs">${p.driver_number}</div>
-                                    <div class="text-xs font-bold text-slate-200">Lap ${p.lap_number}</div>
+                            <div class="flex items-center justify-between p-2 bg-slate-950 border border-slate-800 rounded-lg">
+                                <div class="flex items-center gap-2">
+                                    <div class="w-6 h-6 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-500 font-bold text-[10px]">${p.driver_number}</div>
+                                    <div class="text-[10px] font-bold text-slate-200">Lap ${p.lap_number}</div>
                                 </div>
-                                <div class="text-sm font-bold text-white">${p.pit_duration ? p.pit_duration.toFixed(2) + 's' : 'In Pit'}</div>
+                                <div class="text-xs font-bold text-white">${p.pit_duration ? p.pit_duration.toFixed(2) + 's' : 'In Pit'}</div>
                             </div>
                         `;
                     });
@@ -1448,20 +1519,147 @@ curl "https://formula-e7c5d4e4cf7d.herokuapp.com/sessions?meeting_key=1234"</pre
                     let rHtml = '';
                     radio.sort((a,b) => new Date(b.date) - new Date(a.date)).slice(0, 15).forEach(r => {
                         rHtml += `
-                            <div class="p-3 bg-slate-950 border border-slate-800 rounded-xl space-y-2">
+                            <div class="p-2 bg-slate-950 border border-slate-800 rounded-lg space-y-1">
                                 <div class="flex justify-between items-center">
                                     <div class="flex items-center gap-2">
-                                        <div class="px-2 py-0.5 bg-red-500/10 text-red-500 rounded text-[10px] font-bold uppercase">${r.driver_number}</div>
-                                        <span class="text-[10px] text-slate-500 font-mono">${new Date(r.date).toLocaleTimeString()}</span>
+                                        <div class="px-1.5 py-0.5 bg-red-500/10 text-red-500 rounded text-[9px] font-bold uppercase">${r.driver_number}</div>
+                                        <span class="text-[9px] text-slate-500 font-mono">${new Date(r.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
                                     </div>
-                                    <a href="${r.recording_url}" target="_blank" class="p-1 hover:bg-slate-800 rounded text-slate-500 hover:text-white transition-all">
-                                        <i data-lucide="play" class="w-3.5 h-3.5"></i>
+                                    <a href="${r.recording_url}" target="_blank" class="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition-all">
+                                        <i data-lucide="play" class="w-3 h-3"></i>
                                     </a>
                                 </div>
                             </div>
                         `;
                     });
                     document.getElementById('session-radio-list').innerHTML = rHtml;
+                }
+
+                // Update Race Control
+                if (!raceControl || raceControl.length === 0) {
+                    document.getElementById('session-race-control-list').innerHTML = '<div class="text-center py-8 text-slate-600 italic">No race control messages.</div>';
+                } else {
+                    let rcHtml = '';
+                    raceControl.sort((a,b) => new Date(b.date) - new Date(a.date)).forEach(rc => {
+                        let badgeColor = 'bg-slate-800 text-slate-400';
+                        if (rc.flag === 'YELLOW') badgeColor = 'bg-yellow-500/10 text-yellow-500';
+                        else if (rc.flag === 'RED') badgeColor = 'bg-red-500/10 text-red-500';
+                        else if (rc.flag === 'GREEN') badgeColor = 'bg-emerald-500/10 text-emerald-500';
+                        else if (rc.flag === 'BLUE') badgeColor = 'bg-blue-500/10 text-blue-500';
+                        
+                        rcHtml += `
+                            <div class="p-2 bg-slate-950 border border-slate-800 rounded-lg space-y-1">
+                                <div class="flex justify-between items-center">
+                                    <span class="px-1.5 py-0.5 ${badgeColor} rounded text-[9px] font-bold uppercase">${rc.flag || 'INFO'}</span>
+                                    <span class="text-[9px] text-slate-500 font-mono">${new Date(rc.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                                </div>
+                                <div class="text-[10px] text-slate-400 leading-tight">${rc.message}</div>
+                            </div>
+                        `;
+                    });
+                    document.getElementById('session-race-control-list').innerHTML = rcHtml;
+                }
+
+                // Update Intervals
+                if (!intervals || intervals.length === 0) {
+                    document.getElementById('session-intervals-list').innerHTML = '<div class="text-center py-8 text-slate-600 italic">No interval data.</div>';
+                } else {
+                    // Group by driver and take latest
+                    const latestIntervals = {};
+                    intervals.forEach(i => { latestIntervals[i.driver_number] = i; });
+                    let iHtml = '<div class="grid grid-cols-2 gap-2">';
+                    Object.values(latestIntervals).sort((a,b) => a.gap_to_leader - b.gap_to_leader).forEach(i => {
+                        iHtml += `
+                            <div class="flex justify-between items-center p-1.5 bg-slate-950 border border-slate-800 rounded-lg">
+                                <span class="text-[10px] font-bold text-slate-400">#${i.driver_number}</span>
+                                <div class="flex gap-2">
+                                    <div class="text-[8px] text-right">
+                                        <div class="text-slate-500 uppercase leading-none">Gap</div>
+                                        <div class="text-slate-200 font-mono">+${i.interval ? i.interval.toFixed(3) : '0.000'}</div>
+                                    </div>
+                                    <div class="text-[8px] text-right">
+                                        <div class="text-slate-500 uppercase leading-none">Lead</div>
+                                        <div class="text-slate-200 font-mono">+${i.gap_to_leader ? i.gap_to_leader.toFixed(3) : '0.000'}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    iHtml += '</div>';
+                    document.getElementById('session-intervals-list').innerHTML = iHtml;
+                }
+
+                // Update Location
+                if (!location || location.length === 0) {
+                    document.getElementById('session-location-info').innerHTML = '<div class="text-center py-8 text-slate-600 italic">No location info.</div>';
+                } else {
+                    const loc = location[0];
+                    document.getElementById('session-location-info').innerHTML = `
+                        <div class="grid grid-cols-2 gap-2">
+                            <div class="p-2 bg-slate-950 border border-slate-800 rounded-lg">
+                                <div class="text-[8px] text-slate-500 uppercase font-bold">Track Name</div>
+                                <div class="text-xs font-bold text-white truncate">${loc.track_name || 'Unknown'}</div>
+                            </div>
+                            <div class="p-2 bg-slate-950 border border-slate-800 rounded-lg">
+                                <div class="text-[8px] text-slate-500 uppercase font-bold">Country</div>
+                                <div class="text-xs font-bold text-white truncate">${loc.country_name || 'Unknown'}</div>
+                            </div>
+                            <div class="p-2 bg-slate-950 border border-slate-800 rounded-lg">
+                                <div class="text-[8px] text-slate-500 uppercase font-bold">Latitude</div>
+                                <div class="text-[10px] font-mono text-slate-300">${loc.latitude}</div>
+                            </div>
+                            <div class="p-2 bg-slate-950 border border-slate-800 rounded-lg">
+                                <div class="text-[8px] text-slate-500 uppercase font-bold">Longitude</div>
+                                <div class="text-[10px] font-mono text-slate-300">${loc.longitude}</div>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                // Render Plots
+                if (positions && positions.length > 0) {
+                    const trace = {
+                        x: positions.map(p => p.x),
+                        y: positions.map(p => p.y),
+                        mode: 'markers',
+                        marker: { size: 2, color: '#ef4444' },
+                        type: 'scatter'
+                    };
+                    const layout = {
+                        paper_bgcolor: 'rgba(0,0,0,0)',
+                        plot_bgcolor: 'rgba(0,0,0,0)',
+                        margin: { l: 10, r: 10, t: 10, b: 10 },
+                        xaxis: { showgrid: false, zeroline: false, showticklabels: false },
+                        yaxis: { showgrid: false, zeroline: false, showticklabels: false, scaleanchor: 'x' },
+                        hovermode: false
+                    };
+                    Plotly.newPlot('session-track-map', [trace], layout, {responsive: true, displayModeBar: false});
+                } else {
+                    document.getElementById('session-track-map').innerHTML = '<div class="flex items-center justify-center h-full text-slate-600 italic">No position data for map.</div>';
+                }
+
+                if (carData && carData.length > 0) {
+                    // Show speed for one driver (first one found)
+                    const dNum = carData[0].driver_number;
+                    const dData = carData.filter(c => c.driver_number === dNum).slice(-200);
+                    const trace = {
+                        y: dData.map(c => c.v_car),
+                        x: dData.map((_, i) => i),
+                        type: 'scatter',
+                        line: { color: '#3b82f6', width: 2 },
+                        fill: 'tozeroy',
+                        fillcolor: 'rgba(59, 130, 246, 0.1)'
+                    };
+                    const layout = {
+                        paper_bgcolor: 'rgba(0,0,0,0)',
+                        plot_bgcolor: 'rgba(0,0,0,0)',
+                        margin: { l: 30, r: 10, t: 10, b: 30 },
+                        xaxis: { gridcolor: '#1e293b', tickfont: {size: 8, color: '#64748b'}},
+                        yaxis: { gridcolor: '#1e293b', tickfont: {size: 8, color: '#64748b'}, title: {text: 'km/h', font: {size: 8, color: '#64748b'}}},
+                    };
+                    Plotly.newPlot('session-telemetry-chart', [trace], layout, {responsive: true, displayModeBar: false});
+                } else {
+                    document.getElementById('session-telemetry-chart').innerHTML = '<div class="flex items-center justify-center h-full text-slate-600 italic">No telemetry data for chart.</div>';
                 }
 
                 // Update Status Info
@@ -1486,9 +1684,25 @@ curl "https://formula-e7c5d4e4cf7d.herokuapp.com/sessions?meeting_key=1234"</pre
                         <span class="text-slate-500 font-bold uppercase text-[10px]">Radio Msgs</span>
                         <span class="text-slate-300 font-mono text-xs">${radio.length}</span>
                     </div>
-                    <div class="flex justify-between py-2">
+                    <div class="flex justify-between py-2 border-b border-slate-800">
                         <span class="text-slate-500 font-bold uppercase text-[10px]">Weather Pts</span>
                         <span class="text-slate-300 font-mono text-xs">${weather.length}</span>
+                    </div>
+                    <div class="flex justify-between py-2 border-b border-slate-800">
+                        <span class="text-slate-500 font-bold uppercase text-[10px]">Race Control</span>
+                        <span class="text-slate-300 font-mono text-xs">${raceControl.length}</span>
+                    </div>
+                    <div class="flex justify-between py-2 border-b border-slate-800">
+                        <span class="text-slate-500 font-bold uppercase text-[10px]">Intervals</span>
+                        <span class="text-slate-300 font-mono text-xs">${intervals.length}</span>
+                    </div>
+                    <div class="flex justify-between py-2 border-b border-slate-800">
+                        <span class="text-slate-500 font-bold uppercase text-[10px]">Positions</span>
+                        <span class="text-slate-300 font-mono text-xs">${positions.length}</span>
+                    </div>
+                    <div class="flex justify-between py-2">
+                        <span class="text-slate-500 font-bold uppercase text-[10px]">Telemetry</span>
+                        <span class="text-slate-300 font-mono text-xs">${carData.length}</span>
                     </div>
                 `;
                 document.getElementById('session-status-info').innerHTML = statusHtml;
