@@ -42,6 +42,7 @@ SEEDING_STOP_SIGNAL_KEY = "f1_api_seeding_stop_signal"
 REFRESH_INTERVALS_KEY = "f1_api_refresh_intervals"
 LAST_REFRESH_KEY = "f1_api_last_refresh"
 MONITORED_SESSIONS_KEY = "f1_api_monitored_sessions"
+SESSION_SEEDING_STATUS_KEY = "f1_api_session_seeding_status_" # Prefix for session_key
 
 # Initialize seeding status from Redis if possible
 def init_seeding_status():
@@ -1375,8 +1376,41 @@ curl "https://formula-e7c5d4e4cf7d.herokuapp.com/sessions?meeting_key=1234"</pre
             const url = dtype ? `/seed/session/${sKey}?data_type=${dtype}` : `/seed/session/${sKey}`;
             const resp = await fetch(url, { method: 'POST' });
             const data = await resp.json();
-            alert(data.status);
+            
+            addLog(`Seeding started: ${data.status}`, 'info');
+            
+            // Start polling for status
+            pollSessionSeedingStatus(sKey);
+            
             if (dtype) viewSessionData(sKey);
+        }
+
+        let sessionSeedingIntervals = {};
+
+        async function pollSessionSeedingStatus(sKey) {
+            // Clear existing interval if any
+            if (sessionSeedingIntervals[sKey]) clearInterval(sessionSeedingIntervals[sKey]);
+            
+            sessionSeedingIntervals[sKey] = setInterval(async () => {
+                try {
+                    const resp = await fetch(`/seed/session/status/${sKey}`);
+                    const data = await resp.json();
+                    
+                    if (data.is_running) {
+                        const progress = data.total_dtypes > 0 ? Math.round((data.processed_dtypes / data.total_dtypes) * 100) : 0;
+                        addLog(`Seeding session ${sKey}: ${progress}% complete (fetching ${data.current_dtype || '...'})`, 'info');
+                    } else {
+                        clearInterval(sessionSeedingIntervals[sKey]);
+                        delete sessionSeedingIntervals[sKey];
+                        addLog(`Seeding session ${sKey} complete!`, 'success');
+                        // Refresh if we are still viewing this session
+                        if (currentSessionKey == sKey) viewSessionData(sKey);
+                    }
+                } catch (e) {
+                    console.error("Failed to poll seeding status:", e);
+                    clearInterval(sessionSeedingIntervals[sKey]);
+                }
+            }, 2000);
         }
 
         async function clearSession(sKey, dtype = null) {
@@ -2302,18 +2336,52 @@ async def clear_meeting(meeting_key: int):
         
     return {"status": f"Cache cleared for meeting {meeting_key}", "keys_affected": keys_deleted}
 
+@app.get("/seed/session/status/{session_key}")
+async def get_session_seeding_status(session_key: int):
+    """Retrieve seeding status for a specific session."""
+    if not r: return {"is_running": False, "status": "Redis not connected"}
+    data = r.get(f"{SESSION_SEEDING_STATUS_KEY}{session_key}")
+    if data:
+        return json.loads(data)
+    return {"is_running": False, "status": "No active seeding"}
+
 @app.post("/seed/session/{session_key}")
 async def seed_session(session_key: int, data_type: str = None):
     """Seed all data types or a specific data type for a session."""
     def run_seed():
         dtypes = [data_type] if data_type else ['weather', 'positions', 'drivers', 'laps', 'race_control', 'location', 'car_data', 'stints', 'intervals', 'pit', 'team_radio']
-        for dtype in dtypes:
+        total = len(dtypes)
+        
+        def update_sess_status(current_dtype=None, processed=0, error=None, is_running=True):
+            status = {
+                "is_running": is_running,
+                "session_key": session_key,
+                "current_dtype": current_dtype,
+                "processed_dtypes": processed,
+                "total_dtypes": total,
+                "error": error,
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+            if r:
+                try: r.setex(f"{SESSION_SEEDING_STATUS_KEY}{session_key}", 3600, json.dumps(status))
+                except: pass
+
+        update_sess_status()
+        
+        for i, dtype in enumerate(dtypes):
+            update_sess_status(current_dtype=dtype, processed=i)
             url = f"{OPENF1_BASE_URL}/{dtype}?session_key={session_key}"
-            resp = requests.get(url)
-            if resp.status_code == 200:
-                # Use None for permanent historical data
-                set_cached_data(f"f1_{dtype}_sk{session_key}", resp.json(), ttl=None)
+            try:
+                resp = requests.get(url, timeout=10)
+                if resp.status_code == 200:
+                    # Use None for permanent historical data
+                    set_cached_data(f"f1_{dtype}_sk{session_key}", resp.json(), ttl=None)
+            except Exception as e:
+                update_sess_status(current_dtype=dtype, processed=i, error=str(e))
+                
             time.sleep(0.5)
+            
+        update_sess_status(processed=total, is_running=False)
             
     thread = threading.Thread(target=run_seed, daemon=True)
     thread.start()
