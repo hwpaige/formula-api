@@ -113,14 +113,14 @@ The API utilizes a tiered caching strategy based on how often the underlying dat
 
 ### cURL
 ```bash
-curl "http://localhost:5000/meetings?year=2024"
+curl "https://formula-e7c5d4e4cf7d.herokuapp.com/meetings?year=2024"
 ```
 
 ### Python (Requests)
 ```python
 import requests
 
-BASE_URL = "http://localhost:5000"
+BASE_URL = "https://formula-e7c5d4e4cf7d.herokuapp.com"
 session_key = 9468
 
 # Fetch live car data
@@ -132,7 +132,7 @@ print(f"Fetched {len(telemetry)} telemetry points.")
 ### JavaScript (Fetch)
 ```javascript
 async function getF1Weather(sessionKey) {
-  const response = await fetch(`http://localhost:5000/weather?session_key=${sessionKey}`);
+  const response = await fetch(`https://formula-e7c5d4e4cf7d.herokuapp.com/weather?session_key=${sessionKey}`);
   const data = await response.json();
   console.log('Current Track Temp:', data[0].track_temperature);
 }

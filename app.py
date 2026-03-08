@@ -23,7 +23,7 @@ _local_metrics = {
     "cache_misses": 0,
     "openf1_errors": 0
 }
-_local_metrics_history = []
+# Global seeding status
 _local_seeding_status = {
     "is_running": False,
     "current_year": None,
@@ -33,8 +33,6 @@ _local_seeding_status = {
     "start_time": None,
     "end_time": None
 }
-_stop_seeding_requested = False
-_start_time = datetime.now(timezone.utc)
 
 # Redis Key Constants
 METRICS_KEY = "f1_api_metrics"
@@ -44,6 +42,18 @@ SEEDING_STOP_SIGNAL_KEY = "f1_api_seeding_stop_signal"
 REFRESH_INTERVALS_KEY = "f1_api_refresh_intervals"
 LAST_REFRESH_KEY = "f1_api_last_refresh"
 MONITORED_SESSIONS_KEY = "f1_api_monitored_sessions"
+
+# Initialize seeding status from Redis if possible
+def init_seeding_status():
+    global _local_seeding_status
+    if r:
+        try:
+            data = r.get(SEEDING_STATUS_KEY)
+            if data:
+                _local_seeding_status = json.loads(data)
+                # If it says it's running but it's from a previous process, 
+                # it might be stuck. 
+        except: pass
 
 # Default Refresh Intervals (seconds)
 DEFAULT_INTERVALS = {
@@ -467,9 +477,12 @@ async def root(request: Request):
                             <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Target Years (comma separated)</label>
                             <input type="text" id="seed-years" value="2023,2024" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-slate-200 focus:outline-none focus:border-red-500 transition-all">
                         </div>
-                        <div class="flex gap-4">
+                        <div class="flex gap-2">
                             <button onclick="triggerSeed()" id="btn-start-seed" class="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-xl transition-all">Start Seeding</button>
                             <button onclick="stopSeed()" id="btn-stop-seed" class="flex-1 bg-slate-800 hover:bg-slate-700 text-white font-bold py-2 px-4 rounded-xl transition-all">Stop</button>
+                            <button onclick="clearStuckStatus()" class="flex-none bg-slate-800 hover:bg-slate-700 text-slate-400 font-bold py-2 px-3 rounded-xl transition-all border border-slate-700" title="Clear Stuck Status">
+                                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -506,7 +519,7 @@ async def root(request: Request):
                         <div class="bg-slate-950 p-6 rounded-2xl border border-slate-800 font-mono text-sm">
                             <div class="flex justify-between items-center">
                                 <span class="text-slate-500">API BASE URL:</span>
-                                <span class="text-blue-400 font-bold" id="api-base-url-display">https://f1-buddy-api.herokuapp.com</span>
+                                <span class="text-blue-400 font-bold" id="api-base-url-display">https://formula-e7c5d4e4cf7d.herokuapp.com</span>
                             </div>
                         </div>
                     </section>
@@ -672,7 +685,7 @@ async def root(request: Request):
                                 <pre class="p-6 text-xs text-blue-300 font-mono overflow-x-auto">
 import requests
 
-BASE_URL = "https://f1-buddy-api.herokuapp.com"
+BASE_URL = "https://formula-e7c5d4e4cf7d.herokuapp.com"
 
 # Fetch 2024 meetings
 meetings = requests.get(f"{BASE_URL}/meetings", params={"year": 2024}).json()
@@ -689,7 +702,7 @@ print(f"Recorded {len(weather)} weather samples.")</pre>
                                     <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">cURL</span>
                                 </div>
                                 <pre class="p-6 text-xs text-amber-400 font-mono overflow-x-auto">
-curl "https://f1-buddy-api.herokuapp.com/sessions?meeting_key=1234"</pre>
+curl "https://formula-e7c5d4e4cf7d.herokuapp.com/sessions?meeting_key=1234"</pre>
                             </div>
                         </div>
                     </section>
@@ -1225,6 +1238,13 @@ curl "https://f1-buddy-api.herokuapp.com/sessions?meeting_key=1234"</pre>
             fetchSeedingStatus();
         }
 
+        async function clearStuckStatus() {
+            if (confirm('Are you sure you want to clear the seeding status? Only do this if seeding is truly stuck after a server restart.')) {
+                await fetch('/clear_seeding_status', { method: 'POST' });
+                fetchSeedingStatus();
+            }
+        }
+
         setInterval(fetchMetrics, 5000);
         setInterval(fetchSeedingStatus, 3000);
         setInterval(() => {
@@ -1342,6 +1362,26 @@ async def stop_seeding():
         except: pass
     return {"status": "Stop signal sent"}
 
+@app.post("/clear_seeding_status")
+async def clear_seeding_status():
+    """Endpoint to clear a stuck seeding status."""
+    global _local_seeding_status
+    _local_seeding_status = {
+        "is_running": False,
+        "current_year": None,
+        "total_meetings": 0,
+        "processed_meetings": 0,
+        "errors": 0,
+        "start_time": None,
+        "end_time": datetime.now(timezone.utc).isoformat()
+    }
+    if r:
+        try:
+            r.delete(SEEDING_STATUS_KEY)
+            r.delete(SEEDING_STOP_SIGNAL_KEY)
+        except: pass
+    return {"status": "Seeding status cleared"}
+
 def seed_historical_f1_data(years=[2023, 2024]):
     """Background task to seed historical F1 data."""
     global _local_seeding_status
@@ -1389,6 +1429,15 @@ def seed_historical_f1_data(years=[2023, 2024]):
                     break
                     
                 m_key = meeting['meeting_key']
+                
+                # Progress tracking
+                update_status({"processed_meetings": status["processed_meetings"] + 1})
+                
+                # Check if we already have sessions for this meeting
+                if get_cached_data(f"f1_sessions_m{m_key}_sNone"):
+                    print(f"Skipping already cached sessions for meeting {m_key}")
+                    continue
+
                 # Fetch sessions for meeting
                 s_url = f"{OPENF1_BASE_URL}/sessions?meeting_key={m_key}"
                 s_resp = requests.get(s_url)
@@ -1399,14 +1448,17 @@ def seed_historical_f1_data(years=[2023, 2024]):
                     # Fetch basic data for each session (Drivers, Laps)
                     for session in sessions:
                         s_key = session['session_key']
-                        for dtype in ['drivers', 'laps', 'stints']:
+                        for dtype in ['drivers', 'laps', 'stints', 'location']:
+                            # Check if already cached
+                            if get_cached_data(f"f1_{dtype}_sk{s_key}"):
+                                continue
+                                
                             d_url = f"{OPENF1_BASE_URL}/{dtype}?session_key={s_key}"
                             d_resp = requests.get(d_url)
                             if d_resp.status_code == 200:
                                 set_cached_data(f"f1_{dtype}_sk{s_key}", d_resp.json(), ttl=604800)
                             time.sleep(0.5) # Prevent rate limit during seeding
                 
-                update_status({"processed_meetings": status["processed_meetings"] + 1})
                 time.sleep(1)
                 
     except Exception as e:
@@ -1459,13 +1511,11 @@ def start_background_worker():
                 # Refresh current year meetings
                 if now - last_run["meetings"] >= current_intervals.get("meetings", 1800):
                     year = datetime.now().year
-                    # Check if we already have meetings cached
-                    if not get_cached_data(f"f1_meetings_{year}"):
-                        url = f"{OPENF1_BASE_URL}/meetings?year={year}"
-                        resp = requests.get(url)
-                        if resp.status_code == 200:
-                            set_cached_data(f"f1_meetings_{year}", resp.json(), ttl=86400) # 24h
-                            update_last_refresh("meetings")
+                    url = f"{OPENF1_BASE_URL}/meetings?year={year}"
+                    resp = requests.get(url)
+                    if resp.status_code == 200:
+                        set_cached_data(f"f1_meetings_{year}", resp.json(), ttl=604800) # 7 days
+                        update_last_refresh("meetings")
                     last_run["meetings"] = now
 
                 # Refresh sessions for current year (every 30m)
@@ -1478,11 +1528,13 @@ def start_background_worker():
                         for meeting in meetings:
                             m_key = meeting['meeting_key']
                             # Check if we already have sessions cached for this meeting
+                            # For current year, we might want to refresh more often, 
+                            # but let's stick to cache-first if it exists for now.
                             if not get_cached_data(f"f1_sessions_m{m_key}_sNone"):
                                 s_url = f"{OPENF1_BASE_URL}/sessions?meeting_key={m_key}"
                                 s_resp = requests.get(s_url)
                                 if s_resp.status_code == 200:
-                                    set_cached_data(f"f1_sessions_m{m_key}_sNone", s_resp.json(), ttl=86400)
+                                    set_cached_data(f"f1_sessions_m{m_key}_sNone", s_resp.json(), ttl=604800)
                         update_last_refresh("sessions")
                     last_run["sessions"] = now
 
@@ -1510,6 +1562,14 @@ def start_background_worker():
 # Start the background worker
 start_background_worker()
 
+# Initialize seeding status from Redis
+init_seeding_status()
+
+# Global variables for startup time and metrics history
+_start_time = datetime.now(timezone.utc)
+_local_metrics_history = []
+_stop_seeding_requested = False
+
 @app.get("/meetings")
 async def get_meetings(year: int = None):
     update_metric("total_requests")
@@ -1519,9 +1579,11 @@ async def get_meetings(year: int = None):
         update_metric("cache_hits")
         return cached
 
+    # If it's a current-year request and we have no cache, we should at least 
+    # check if the background worker has finished fetching. 
+    # But for now, returning empty is safer to avoid direct hits.
+    
     update_metric("cache_misses")
-    # Instead of fetching from OpenF1, we only return cached data
-    # This matches the user requirement that it should just be showing cached data
     return []
 
 @app.get("/sessions")
