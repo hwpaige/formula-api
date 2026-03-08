@@ -1469,11 +1469,11 @@ curl "https://formula-e7c5d4e4cf7d.herokuapp.com/sessions?meeting_key=1234"</pre
                 });
 
                 // Update Drivers
-                if (!drivers || drivers.length === 0) {
+                if (!Array.isArray(drivers) || drivers.length === 0) {
                     document.getElementById('session-drivers-list').innerHTML = '<div class="col-span-full text-center py-8 text-slate-600 italic">No drivers found for this session.</div>';
                 } else {
                     let dHtml = '';
-                    drivers.sort((a,b) => a.driver_number - b.driver_number).forEach(d => {
+                    [...drivers].sort((a,b) => a.driver_number - b.driver_number).forEach(d => {
                         const teamColor = d.team_colour ? `#${d.team_colour}` : '#334155';
                         dHtml += `
                             <div class="flex items-center gap-2 p-1.5 bg-slate-950 border border-slate-800 rounded-lg">
@@ -1491,7 +1491,7 @@ curl "https://formula-e7c5d4e4cf7d.herokuapp.com/sessions?meeting_key=1234"</pre
                 }
 
                 // Update Weather (take the latest reading)
-                if (!weather || weather.length === 0) {
+                if (!Array.isArray(weather) || weather.length === 0) {
                     document.getElementById('session-weather-info').innerHTML = '<div class="text-center py-8 text-slate-600 italic">No weather data recorded.</div>';
                 } else {
                     const latest = weather[weather.length - 1];
@@ -1526,12 +1526,12 @@ curl "https://formula-e7c5d4e4cf7d.herokuapp.com/sessions?meeting_key=1234"</pre
                 }
 
                 // Update Laps (show all laps with scroll)
-                if (!laps || laps.length === 0) {
+                if (!Array.isArray(laps) || laps.length === 0) {
                     document.getElementById('session-laps-body').innerHTML = '<tr><td colspan="7" class="py-8 text-center text-slate-600 italic">No lap data found.</td></tr>';
                 } else {
-                    laps.sort((a,b) => b.lap_number - a.lap_number);
+                    const sortedLaps = [...laps].sort((a,b) => b.lap_number - a.lap_number);
                     let lHtml = '';
-                    laps.forEach(l => {
+                    sortedLaps.forEach(l => {
                         const timeStr = l.lap_duration ? l.lap_duration.toFixed(3) : '-';
                         const startTime = l.date_start ? new Date(l.date_start).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'}) : '-';
                         lHtml += `
@@ -1550,11 +1550,11 @@ curl "https://formula-e7c5d4e4cf7d.herokuapp.com/sessions?meeting_key=1234"</pre
                 }
 
                 // Update Stints
-                if (!stints || stints.length === 0) {
+                if (!Array.isArray(stints) || stints.length === 0) {
                     document.getElementById('session-stints-list').innerHTML = '<div class="text-center py-8 text-slate-600 italic">No stint data available.</div>';
                 } else {
                     let stHtml = '';
-                    stints.sort((a,b) => b.stint_number - a.stint_number).slice(0, 15).forEach(s => {
+                    [...stints].sort((a,b) => b.stint_number - a.stint_number).slice(0, 15).forEach(s => {
                         stHtml += `
                             <div class="flex items-center justify-between p-2 bg-slate-950 border border-slate-800 rounded-lg">
                                 <div class="flex items-center gap-2">
@@ -1572,11 +1572,11 @@ curl "https://formula-e7c5d4e4cf7d.herokuapp.com/sessions?meeting_key=1234"</pre
                 }
 
                 // Update Pit Stops
-                if (!pits || pits.length === 0) {
+                if (!Array.isArray(pits) || pits.length === 0) {
                     document.getElementById('session-pit-list').innerHTML = '<div class="text-center py-8 text-slate-600 italic">No pit stops recorded.</div>';
                 } else {
                     let pHtml = '';
-                    pits.sort((a,b) => b.lap_number - a.lap_number).slice(0, 15).forEach(p => {
+                    [...pits].sort((a,b) => b.lap_number - a.lap_number).slice(0, 15).forEach(p => {
                         pHtml += `
                             <div class="flex items-center justify-between p-2 bg-slate-950 border border-slate-800 rounded-lg">
                                 <div class="flex items-center gap-2">
@@ -1591,11 +1591,11 @@ curl "https://formula-e7c5d4e4cf7d.herokuapp.com/sessions?meeting_key=1234"</pre
                 }
 
                 // Update Radio
-                if (!radio || radio.length === 0) {
+                if (!Array.isArray(radio) || radio.length === 0) {
                     document.getElementById('session-radio-list').innerHTML = '<div class="text-center py-8 text-slate-600 italic">No radio messages captured.</div>';
                 } else {
                     let rHtml = '';
-                    radio.sort((a,b) => new Date(b.date) - new Date(a.date)).slice(0, 15).forEach(r => {
+                    [...radio].sort((a,b) => new Date(b.date) - new Date(a.date)).slice(0, 15).forEach(r => {
                         rHtml += `
                             <div class="p-2 bg-slate-950 border border-slate-800 rounded-lg space-y-1">
                                 <div class="flex justify-between items-center">
@@ -1614,11 +1614,11 @@ curl "https://formula-e7c5d4e4cf7d.herokuapp.com/sessions?meeting_key=1234"</pre
                 }
 
                 // Update Race Control
-                if (!raceControl || raceControl.length === 0) {
+                if (!Array.isArray(raceControl) || raceControl.length === 0) {
                     document.getElementById('session-race-control-list').innerHTML = '<div class="text-center py-8 text-slate-600 italic">No race control messages.</div>';
                 } else {
                     let rcHtml = '';
-                    raceControl.sort((a,b) => new Date(b.date) - new Date(a.date)).forEach(rc => {
+                    [...raceControl].sort((a,b) => new Date(b.date) - new Date(a.date)).forEach(rc => {
                         let badgeColor = 'bg-slate-800 text-slate-400';
                         if (rc.flag === 'YELLOW') badgeColor = 'bg-yellow-500/10 text-yellow-500';
                         else if (rc.flag === 'RED') badgeColor = 'bg-red-500/10 text-red-500';
@@ -1639,7 +1639,7 @@ curl "https://formula-e7c5d4e4cf7d.herokuapp.com/sessions?meeting_key=1234"</pre
                 }
 
                 // Update Intervals
-                if (!intervals || intervals.length === 0) {
+                if (!Array.isArray(intervals) || intervals.length === 0) {
                     document.getElementById('session-intervals-list').innerHTML = '<div class="text-center py-8 text-slate-600 italic">No interval data.</div>';
                 } else {
                     // Group by driver and take latest
@@ -1668,7 +1668,7 @@ curl "https://formula-e7c5d4e4cf7d.herokuapp.com/sessions?meeting_key=1234"</pre
                 }
 
                 // Update Location
-                if (!location || location.length === 0) {
+                if (!Array.isArray(location) || location.length === 0) {
                     document.getElementById('session-location-info').innerHTML = '<div class="text-center py-8 text-slate-600 italic">No location info.</div>';
                 } else {
                     const loc = location[0];
@@ -1695,7 +1695,7 @@ curl "https://formula-e7c5d4e4cf7d.herokuapp.com/sessions?meeting_key=1234"</pre
                 }
 
                 // Render Plots
-                if (positions && positions.length > 0) {
+                if (Array.isArray(positions) && positions.length > 0) {
                     addLog(`Rendering track map with ${positions.length} points`, 'info');
                     const trace = {
                         x: positions.map(p => p.x),
@@ -1717,7 +1717,7 @@ curl "https://formula-e7c5d4e4cf7d.herokuapp.com/sessions?meeting_key=1234"</pre
                     document.getElementById('session-track-map').innerHTML = '<div class="flex items-center justify-center h-full text-slate-600 italic">No position data for map.</div>';
                 }
 
-                if (carData && carData.length > 0) {
+                if (Array.isArray(carData) && carData.length > 0) {
                     addLog(`Rendering telemetry chart for car ${carData[0].driver_number}`, 'info');
                     // Show speed for one driver (first one found)
                     const dNum = carData[0].driver_number;
@@ -1743,46 +1743,47 @@ curl "https://formula-e7c5d4e4cf7d.herokuapp.com/sessions?meeting_key=1234"</pre
                 }
 
                 // Update Status Info
+                const safeLen = (arr) => Array.isArray(arr) ? arr.length : 0;
                 const statusHtml = `
                     <div class="flex justify-between py-2 border-b border-slate-800">
                         <span class="text-slate-500 font-bold uppercase text-[10px]">Drivers</span>
-                        <span class="text-slate-300 font-mono text-xs">${drivers.length}</span>
+                        <span class="text-slate-300 font-mono text-xs">${safeLen(drivers)}</span>
                     </div>
                     <div class="flex justify-between py-2 border-b border-slate-800">
                         <span class="text-slate-500 font-bold uppercase text-[10px]">Total Laps</span>
-                        <span class="text-slate-300 font-mono text-xs">${laps.length}</span>
+                        <span class="text-slate-300 font-mono text-xs">${safeLen(laps)}</span>
                     </div>
                     <div class="flex justify-between py-2 border-b border-slate-800">
                         <span class="text-slate-500 font-bold uppercase text-[10px]">Stints</span>
-                        <span class="text-slate-300 font-mono text-xs">${stints.length}</span>
+                        <span class="text-slate-300 font-mono text-xs">${safeLen(stints)}</span>
                     </div>
                     <div class="flex justify-between py-2 border-b border-slate-800">
                         <span class="text-slate-500 font-bold uppercase text-[10px]">Pit Stops</span>
-                        <span class="text-slate-300 font-mono text-xs">${pits.length}</span>
+                        <span class="text-slate-300 font-mono text-xs">${safeLen(pits)}</span>
                     </div>
                     <div class="flex justify-between py-2 border-b border-slate-800">
                         <span class="text-slate-500 font-bold uppercase text-[10px]">Radio Msgs</span>
-                        <span class="text-slate-300 font-mono text-xs">${radio.length}</span>
+                        <span class="text-slate-300 font-mono text-xs">${safeLen(radio)}</span>
                     </div>
                     <div class="flex justify-between py-2 border-b border-slate-800">
                         <span class="text-slate-500 font-bold uppercase text-[10px]">Weather Pts</span>
-                        <span class="text-slate-300 font-mono text-xs">${weather.length}</span>
+                        <span class="text-slate-300 font-mono text-xs">${safeLen(weather)}</span>
                     </div>
                     <div class="flex justify-between py-2 border-b border-slate-800">
                         <span class="text-slate-500 font-bold uppercase text-[10px]">Race Control</span>
-                        <span class="text-slate-300 font-mono text-xs">${raceControl.length}</span>
+                        <span class="text-slate-300 font-mono text-xs">${safeLen(raceControl)}</span>
                     </div>
                     <div class="flex justify-between py-2 border-b border-slate-800">
                         <span class="text-slate-500 font-bold uppercase text-[10px]">Intervals</span>
-                        <span class="text-slate-300 font-mono text-xs">${intervals.length}</span>
+                        <span class="text-slate-300 font-mono text-xs">${safeLen(intervals)}</span>
                     </div>
                     <div class="flex justify-between py-2 border-b border-slate-800">
                         <span class="text-slate-500 font-bold uppercase text-[10px]">Positions</span>
-                        <span class="text-slate-300 font-mono text-xs">${positions.length}</span>
+                        <span class="text-slate-300 font-mono text-xs">${safeLen(positions)}</span>
                     </div>
                     <div class="flex justify-between py-2">
                         <span class="text-slate-500 font-bold uppercase text-[10px]">Telemetry</span>
-                        <span class="text-slate-300 font-mono text-xs">${carData.length}</span>
+                        <span class="text-slate-300 font-mono text-xs">${safeLen(carData)}</span>
                     </div>
                 `;
                 document.getElementById('session-status-info').innerHTML = statusHtml;
