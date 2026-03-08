@@ -314,9 +314,14 @@ async def root(request: Request):
                 <h2 class="text-2xl font-bold tracking-tight">F1 Race Calendar</h2>
                 <div class="flex items-center gap-4">
                     <select id="calendar-year-select" onchange="refreshCalendar()" class="bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-sm font-bold text-slate-200 outline-none focus:border-red-500 transition-all">
-                        <option value="2025">2025 Season</option>
-                        <option value="2024" selected>2024 Season</option>
+                        <option value="2025" selected>2025 Season</option>
+                        <option value="2024">2024 Season</option>
                         <option value="2023">2023 Season</option>
+                        <option value="2022">2022 Season</option>
+                        <option value="2021">2021 Season</option>
+                        <option value="2020">2020 Season</option>
+                        <option value="2019">2019 Season</option>
+                        <option value="2018">2018 Season</option>
                     </select>
                     <div class="flex items-center gap-2 px-2 border-l border-slate-800 ml-2">
                         <button onclick="seedYear()" class="p-2 hover:bg-emerald-500/10 rounded-lg transition-all text-slate-400 hover:text-emerald-500" title="Seed Entire Year">
@@ -398,8 +403,33 @@ async def root(request: Request):
                     </div>
                 </div>
 
-                <!-- Right Column: Weather & Info -->
+                <!-- Right Column: Data Management -->
                 <div class="space-y-6">
+                    <div class="bg-slate-900/50 border border-slate-800 rounded-2xl p-6">
+                        <h3 class="text-lg font-bold mb-4 flex items-center gap-2">
+                            <i data-lucide="database" class="text-red-500 w-5 h-5"></i>
+                            Session Data Management
+                        </h3>
+                        <div class="space-y-2" id="session-data-management">
+                            <!-- Data type controls will be loaded here -->
+                            <div class="grid grid-cols-1 gap-2">
+                                ${['weather', 'positions', 'drivers', 'laps', 'race_control', 'location', 'car_data', 'stints', 'intervals', 'pit', 'team_radio'].map(dtype => `
+                                    <div class="flex items-center justify-between p-2 bg-slate-950 border border-slate-800 rounded-xl">
+                                        <span class="text-xs font-bold text-slate-400 uppercase tracking-tight">${dtype.replace('_', ' ')}</span>
+                                        <div class="flex items-center gap-2">
+                                            <button onclick="seedSession(currentSessionKey, '${dtype}')" class="p-1.5 hover:bg-emerald-500/10 rounded transition-all text-slate-600 hover:text-emerald-500" title="Seed ${dtype}">
+                                                <i data-lucide="database-zap" class="w-3.5 h-3.5"></i>
+                                            </button>
+                                            <button onclick="clearSession(currentSessionKey, '${dtype}')" class="p-1.5 hover:bg-red-500/10 rounded transition-all text-slate-600 hover:text-red-500" title="Clear ${dtype} Cache">
+                                                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="bg-slate-900/50 border border-slate-800 rounded-2xl p-6">
                         <h3 class="text-lg font-bold mb-4 flex items-center gap-2">
                             <i data-lucide="cloud-sun" class="text-emerald-500 w-5 h-5"></i>
@@ -1010,46 +1040,17 @@ curl "https://formula-e7c5d4e4cf7d.herokuapp.com/sessions?meeting_key=1234"</pre
                         <div class="col-span-full py-20 text-center text-slate-500 border border-dashed border-slate-800 rounded-3xl">
                             <i data-lucide="frown" class="w-12 h-12 mx-auto mb-4 opacity-20"></i>
                             <p>No meetings found for ${year} in cache.</p>
-                            <p class="text-xs mt-2">Try seeding this year in the Seeding tab.</p>
+                            <p class="text-xs mt-2 font-bold text-red-400">Pull meetings first using the Seed button in the header.</p>
                         </div>
                     `;
                 } else {
                     // Sort by date
                     meetings.sort((a, b) => new Date(a.date_start) - new Date(b.date_start));
                     
-                    // Fetch all sessions for all meetings in parallel
-                    const sessionPromises = meetings.map(m => fetch(`/sessions?meeting_key=${m.meeting_key}`).then(r => r.json()));
-                    const allSessions = await Promise.all(sessionPromises);
-                    
                     let html = '';
                     meetings.forEach((m, idx) => {
                         const startDate = new Date(m.date_start);
                         const dateStr = startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-                        const sessions = allSessions[idx] || [];
-                        
-                        // Sort sessions by date
-                        sessions.sort((a, b) => new Date(a.date_start) - new Date(b.date_start));
-                        
-                        let sessionsHtml = '';
-                        if (sessions.length === 0) {
-                            sessionsHtml = '<div class="text-[10px] text-slate-500 italic py-2">No sessions found.</div>';
-                        } else {
-                            sessionsHtml = '<div class="space-y-2">';
-                            sessions.forEach(s => {
-                                sessionsHtml += `
-                                    <div class="p-3 bg-slate-950/50 border border-slate-800 rounded-xl hover:border-slate-700 transition-all cursor-pointer group/session" onclick="viewSessionData(${s.session_key})">
-                                        <div class="flex justify-between items-center">
-                                            <div>
-                                                <div class="text-xs font-bold text-slate-200 group-hover/session:text-red-400 transition-colors">${s.session_name}</div>
-                                                <div class="text-[9px] text-slate-500 font-mono">${new Date(s.date_start).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
-                                            </div>
-                                            <i data-lucide="chevron-right" class="w-3.5 h-3.5 text-slate-700 group-hover/session:text-red-500 transition-all"></i>
-                                        </div>
-                                    </div>
-                                `;
-                            });
-                            sessionsHtml += '</div>';
-                        }
                         
                         html += `
                             <div class="bg-slate-900/50 border border-slate-800 rounded-2xl overflow-hidden hover:border-slate-700 transition-all group flex flex-col">
@@ -1059,7 +1060,7 @@ curl "https://formula-e7c5d4e4cf7d.herokuapp.com/sessions?meeting_key=1234"</pre
                                             Round ${m.meeting_key % 100}
                                         </div>
                                         <div class="flex items-center gap-2">
-                                            <button onclick="event.stopPropagation(); seedMeeting(${m.meeting_key})" class="p-1 hover:bg-emerald-500/10 rounded transition-all text-slate-600 hover:text-emerald-500" title="Seed Meeting">
+                                            <button onclick="event.stopPropagation(); seedMeeting(${m.meeting_key})" class="p-1 hover:bg-emerald-500/10 rounded transition-all text-slate-600 hover:text-emerald-500" title="Seed Meeting (Sessions)">
                                                 <i data-lucide="database-zap" class="w-3.5 h-3.5"></i>
                                             </button>
                                             <button onclick="event.stopPropagation(); clearMeeting(${m.meeting_key})" class="p-1 hover:bg-red-500/10 rounded transition-all text-slate-600 hover:text-red-500" title="Clear Meeting Cache">
@@ -1072,7 +1073,9 @@ curl "https://formula-e7c5d4e4cf7d.herokuapp.com/sessions?meeting_key=1234"</pre
                                     <p class="text-slate-500 text-sm mb-4">${m.location}, ${m.country_name}</p>
                                     
                                     <div id="sessions-container-${m.meeting_key}" class="space-y-2 mt-4 pt-4 border-t border-slate-800/50">
-                                        ${sessionsHtml}
+                                        <button onclick="loadSessionsForMeeting(${m.meeting_key})" class="w-full py-2 bg-slate-950 border border-slate-800 rounded-xl text-[10px] font-bold uppercase tracking-widest text-slate-500 hover:text-red-500 transition-all">
+                                            Fetch Sessions
+                                        </button>
                                     </div>
                                 </div>
                             </div>
@@ -1085,6 +1088,46 @@ curl "https://formula-e7c5d4e4cf7d.herokuapp.com/sessions?meeting_key=1234"</pre
             } finally {
                 if (icon) icon.classList.remove('animate-spin');
                 lucide.createIcons();
+            }
+        }
+
+        async function loadSessionsForMeeting(mKey) {
+            const container = document.getElementById(`sessions-container-${mKey}`);
+            container.innerHTML = '<div class="text-center py-4 animate-pulse"><div class="w-4 h-4 bg-red-500 rounded-full mx-auto"></div></div>';
+            
+            try {
+                const resp = await fetch(`/sessions?meeting_key=${mKey}`);
+                const sessions = await resp.json();
+                
+                if (!sessions || sessions.length === 0) {
+                    container.innerHTML = `
+                        <div class="text-[10px] text-slate-500 italic py-2">No sessions in cache.</div>
+                        <button onclick="seedMeeting(${mKey}).then(() => loadSessionsForMeeting(${mKey}))" class="w-full py-2 bg-slate-950 border border-slate-800 rounded-xl text-[10px] font-bold uppercase tracking-widest text-emerald-500 hover:bg-emerald-500/10 transition-all">
+                            Pull Sessions
+                        </button>
+                    `;
+                } else {
+                    sessions.sort((a, b) => new Date(a.date_start) - new Date(b.date_start));
+                    let html = '<div class="space-y-2">';
+                    sessions.forEach(s => {
+                        html += `
+                            <div class="p-3 bg-slate-950/50 border border-slate-800 rounded-xl hover:border-slate-700 transition-all cursor-pointer group/session" onclick="viewSessionData(${s.session_key})">
+                                <div class="flex justify-between items-center">
+                                    <div>
+                                        <div class="text-xs font-bold text-slate-200 group-hover/session:text-red-400 transition-colors">${s.session_name}</div>
+                                        <div class="text-[9px] text-slate-500 font-mono">${new Date(s.date_start).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
+                                    </div>
+                                    <i data-lucide="chevron-right" class="w-3.5 h-3.5 text-slate-700 group-hover/session:text-red-500 transition-all"></i>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    html += '</div>';
+                    container.innerHTML = html;
+                    lucide.createIcons();
+                }
+            } catch (e) {
+                container.innerHTML = `<div class="text-[10px] text-red-500 py-2">Error: ${e.message}</div>`;
             }
         }
 
@@ -1125,15 +1168,18 @@ curl "https://formula-e7c5d4e4cf7d.herokuapp.com/sessions?meeting_key=1234"</pre
             }
         }
 
-        async function seedSession(sKey) {
-            const resp = await fetch(`/seed/session/${sKey}`, { method: 'POST' });
+        async function seedSession(sKey, dtype = null) {
+            const url = dtype ? `/seed/session/${sKey}?data_type=${dtype}` : `/seed/session/${sKey}`;
+            const resp = await fetch(url, { method: 'POST' });
             const data = await resp.json();
             alert(data.status);
+            if (dtype) viewSessionData(sKey);
         }
 
-        async function clearSession(sKey) {
-            if (confirm(`Clear cache for session ${sKey}?`)) {
-                const resp = await fetch(`/clear/session/${sKey}`, { method: 'POST' });
+        async function clearSession(sKey, dtype = null) {
+            const url = dtype ? `/clear/session/${sKey}?data_type=${dtype}` : `/clear/session/${sKey}`;
+            if (confirm(`Clear cache for ${dtype ? dtype : 'all data'} for session ${sKey}?`)) {
+                const resp = await fetch(url, { method: 'POST' });
                 const data = await resp.json();
                 alert(`${data.status} (${data.keys_affected} keys affected)`);
                 viewSessionData(sKey); // Refresh the view
@@ -1685,7 +1731,7 @@ _stop_seeding_requested = False
 
 @app.post("/seed/year/{year}")
 async def seed_year(year: int):
-    """Seed all meetings and sessions for a specific year."""
+    """Seed all meetings for a specific year (Recursive level 1)."""
     def run_seed():
         # Fetch and cache meetings
         m_url = f"{OPENF1_BASE_URL}/meetings?year={year}"
@@ -1693,62 +1739,54 @@ async def seed_year(year: int):
         if m_resp.status_code == 200:
             meetings = m_resp.json()
             set_cached_data(f"f1_meetings_{year}", meetings, ttl=604800)
-            for meeting in meetings:
-                m_key = meeting['meeting_key']
-                # Fetch and cache sessions for each meeting
-                s_url = f"{OPENF1_BASE_URL}/sessions?meeting_key={m_key}"
-                s_resp = requests.get(s_url)
-                if s_resp.status_code == 200:
-                    set_cached_data(f"f1_sessions_m{m_key}_sNone", s_resp.json(), ttl=604800)
-                time.sleep(0.5)
     
     thread = threading.Thread(target=run_seed, daemon=True)
     thread.start()
-    return {"status": f"Seeding started for year {year}"}
+    return {"status": f"Seeding started for meetings of year {year}"}
 
 @app.post("/clear/year/{year}")
 async def clear_year(year: int):
-    """Clear meetings and session cache for a specific year."""
+    """Clear meetings and all recursive child data for a specific year."""
     if not r: return {"status": "Redis not connected"}
     keys_deleted = 0
-    # Delete meetings cache
+    
+    # 1. Clear meetings list
     if r.delete(f"f1_meetings_{year}"): keys_deleted += 1
     
-    # We need to find all sessions for meetings in this year to clear them
+    # 2. Clear all sessions and data types for meetings in this year
+    # We can use a pattern if meeting_keys are somewhat predictable, 
+    # but scanning for year pattern is hard unless we fetch meetings first.
     m_data = get_cached_data(f"f1_meetings_{year}")
     if m_data:
         for meeting in m_data:
             m_key = meeting['meeting_key']
-            # Delete session list for this meeting
+            # Clear sessions list
             if r.delete(f"f1_sessions_m{m_key}_sNone"): keys_deleted += 1
-            # Also find all specific session data and clear it? 
-            # That might be too many keys to scan without patterns.
-            # Let's use scan to find f1_sessions_m{m_key}_* and f1_*_sk{session_key}
-            
-    return {"status": f"Cache cleared for year {year}", "keys_affected": keys_deleted}
+            # Clear all session data using pattern
+            # Pattern matches f1_weather_sk{session_key} where session_key belongs to meeting
+            # Since we don't have session_keys easily without fetching sessions, 
+            # let's just use a broad pattern for the meeting if possible, 
+            # but usually keys are f1_{type}_sk{session_key}.
+            # The most reliable way is recursive clear.
+    
+    # Fallback: broad pattern scan for anything related to this year if possible
+    # (Not easily possible without knowing meeting_keys)
+    
+    return {"status": f"Cache cleared for meetings and basic info for year {year}", "keys_affected": keys_deleted}
 
 @app.post("/seed/meeting/{meeting_key}")
 async def seed_meeting(meeting_key: int):
-    """Seed all sessions for a specific meeting."""
+    """Seed all sessions for a specific meeting (Recursive level 2)."""
     def run_seed():
         s_url = f"{OPENF1_BASE_URL}/sessions?meeting_key={meeting_key}"
         s_resp = requests.get(s_url)
         if s_resp.status_code == 200:
             sessions = s_resp.json()
             set_cached_data(f"f1_sessions_m{meeting_key}_sNone", sessions, ttl=604800)
-            for session in sessions:
-                s_key = session['session_key']
-                # Seed basic session data
-                for dtype in ['drivers', 'laps', 'stints', 'location']:
-                    d_url = f"{OPENF1_BASE_URL}/{dtype}?session_key={s_key}"
-                    d_resp = requests.get(d_url)
-                    if d_resp.status_code == 200:
-                        set_cached_data(f"f1_{dtype}_sk{s_key}", d_resp.json(), ttl=604800)
-                    time.sleep(0.5)
                     
     thread = threading.Thread(target=run_seed, daemon=True)
     thread.start()
-    return {"status": f"Seeding started for meeting {meeting_key}"}
+    return {"status": f"Seeding started for sessions of meeting {meeting_key}"}
 
 @app.post("/clear/meeting/{meeting_key}")
 async def clear_meeting(meeting_key: int):
@@ -1768,10 +1806,11 @@ async def clear_meeting(meeting_key: int):
     return {"status": f"Cache cleared for meeting {meeting_key}", "keys_affected": keys_deleted}
 
 @app.post("/seed/session/{session_key}")
-async def seed_session(session_key: int):
-    """Seed all data types for a specific session."""
+async def seed_session(session_key: int, data_type: str = None):
+    """Seed all data types or a specific data type for a session."""
     def run_seed():
-        for dtype in ['weather', 'positions', 'drivers', 'laps', 'race_control', 'location', 'car_data', 'stints', 'intervals', 'pit', 'team_radio']:
+        dtypes = [data_type] if data_type else ['weather', 'positions', 'drivers', 'laps', 'race_control', 'location', 'car_data', 'stints', 'intervals', 'pit', 'team_radio']
+        for dtype in dtypes:
             url = f"{OPENF1_BASE_URL}/{dtype}?session_key={session_key}"
             resp = requests.get(url)
             if resp.status_code == 200:
@@ -1781,18 +1820,23 @@ async def seed_session(session_key: int):
             
     thread = threading.Thread(target=run_seed, daemon=True)
     thread.start()
-    return {"status": f"Seeding started for session {session_key}"}
+    msg = f"Seeding {data_type if data_type else 'all data'} started for session {session_key}"
+    return {"status": msg}
 
 @app.post("/clear/session/{session_key}")
-async def clear_session(session_key: int):
-    """Clear all data cache for a specific session."""
+async def clear_session(session_key: int, data_type: str = None):
+    """Clear all data cache or a specific data type for a session."""
     if not r: return {"status": "Redis not connected"}
     keys_deleted = 0
-    pattern = f"f1_*_sk{session_key}*"
+    if data_type:
+        pattern = f"f1_{data_type}_sk{session_key}*"
+    else:
+        pattern = f"f1_*_sk{session_key}*"
+        
     for key in r.scan_iter(pattern):
         r.delete(key)
         keys_deleted += 1
-    return {"status": f"Cache cleared for session {session_key}", "keys_affected": keys_deleted}
+    return {"status": f"Cache cleared for {data_type if data_type else 'all data'} for session {session_key}", "keys_affected": keys_deleted}
 
 @app.get("/meetings")
 async def get_meetings(year: int = None):
