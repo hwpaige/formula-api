@@ -314,6 +314,7 @@ async def root(request: Request):
                 <h2 class="text-2xl font-bold tracking-tight">F1 Race Calendar</h2>
                 <div class="flex items-center gap-4">
                     <select id="calendar-year-select" onchange="refreshCalendar()" class="bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-sm font-bold text-slate-200 outline-none focus:border-red-500 transition-all">
+                        <option value="2026">2026 Season</option>
                         <option value="2025" selected>2025 Season</option>
                         <option value="2024">2024 Season</option>
                         <option value="2023">2023 Season</option>
@@ -322,6 +323,10 @@ async def root(request: Request):
                         <option value="2020">2020 Season</option>
                         <option value="2019">2019 Season</option>
                         <option value="2018">2018 Season</option>
+                        <option value="2017">2017 Season</option>
+                        <option value="2016">2016 Season</option>
+                        <option value="2015">2015 Season</option>
+                        <option value="2014">2014 Season</option>
                     </select>
                     <div class="flex items-center gap-2 px-2 border-l border-slate-800 ml-2">
                         <button onclick="seedYear()" class="p-2 hover:bg-emerald-500/10 rounded-lg transition-all text-slate-400 hover:text-emerald-500" title="Seed Entire Year">
