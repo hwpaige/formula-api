@@ -171,7 +171,10 @@ def set_cached_data(key, data, ttl=300):
         json_str = json.dumps(data)
         compressed = zlib.compress(json_str.encode('utf-8'))
         encoded = base64.b64encode(compressed).decode('utf-8')
-        r.setex(key, ttl, encoded)
+        if ttl:
+            r.setex(key, ttl, encoded)
+        else:
+            r.set(key, encoded)
         return True
     except Exception as e:
         print(f"Redis write error for {key}: {e}")
@@ -1775,7 +1778,7 @@ def seed_historical_f1_data(years=[2023, 2024]):
                 continue
             
             meetings = resp.json()
-            set_cached_data(f"f1_meetings_{year}", meetings, ttl=604800) # 7 days for seed
+            set_cached_data(f"f1_meetings_{year}", meetings, ttl=None) # Permanent for seed
             
             update_status({"total_meetings": status["total_meetings"] + len(meetings)})
             
@@ -1795,7 +1798,7 @@ def seed_historical_f1_data(years=[2023, 2024]):
                     s_resp = requests.get(s_url)
                     if s_resp.status_code == 200:
                         sessions = s_resp.json()
-                        set_cached_data(f"f1_sessions_m{m_key}_sNone", sessions, ttl=604800)
+                        set_cached_data(f"f1_sessions_m{m_key}_sNone", sessions, ttl=None)
                     time.sleep(0.5)
 
                 if sessions:
@@ -1810,7 +1813,7 @@ def seed_historical_f1_data(years=[2023, 2024]):
                                 d_url = f"{OPENF1_BASE_URL}/{dtype}?session_key={s_key}"
                                 d_resp = requests.get(d_url)
                                 if d_resp.status_code == 200:
-                                    set_cached_data(f"f1_{dtype}_sk{s_key}", d_resp.json(), ttl=604800)
+                                    set_cached_data(f"f1_{dtype}_sk{s_key}", d_resp.json(), ttl=None)
                                 time.sleep(0.5)
                 
                 time.sleep(1)
@@ -1868,7 +1871,7 @@ def start_background_worker():
                     url = f"{OPENF1_BASE_URL}/meetings?year={year}"
                     resp = requests.get(url)
                     if resp.status_code == 200:
-                        set_cached_data(f"f1_meetings_{year}", resp.json(), ttl=604800) # 7 days
+                        set_cached_data(f"f1_meetings_{year}", resp.json(), ttl=None) # Permanent
                         update_last_refresh("meetings")
                     last_run["meetings"] = now
 
@@ -1888,7 +1891,7 @@ def start_background_worker():
                                 s_url = f"{OPENF1_BASE_URL}/sessions?meeting_key={m_key}"
                                 s_resp = requests.get(s_url)
                                 if s_resp.status_code == 200:
-                                    set_cached_data(f"f1_sessions_m{m_key}_sNone", s_resp.json(), ttl=604800)
+                                    set_cached_data(f"f1_sessions_m{m_key}_sNone", s_resp.json(), ttl=None)
                         update_last_refresh("sessions")
                     last_run["sessions"] = now
 
@@ -1902,7 +1905,10 @@ def start_background_worker():
                             url = f"{OPENF1_BASE_URL}/{dtype}?session_key={s_key}"
                             resp = requests.get(url)
                             if resp.status_code == 200:
-                                set_cached_data(f"f1_{dtype}_sk{s_key}", resp.json(), ttl=interval * 2 if interval < 300 else 604800)
+                                # For live monitoring, use 7-day TTL as "long-term" but not necessarily permanent
+                                # unless it's explicitly seeded. But let's use permanent if it's over 300s.
+                                ttl = interval * 2 if interval < 300 else None
+                                set_cached_data(f"f1_{dtype}_sk{s_key}", resp.json(), ttl=ttl)
                                 update_last_refresh(dtype)
                             last_run[lr_key] = now
             except Exception as e:
@@ -1933,7 +1939,7 @@ async def seed_year(year: int):
         m_resp = requests.get(m_url)
         if m_resp.status_code == 200:
             meetings = m_resp.json()
-            set_cached_data(f"f1_meetings_{year}", meetings, ttl=604800)
+            set_cached_data(f"f1_meetings_{year}", meetings, ttl=None)
     
     thread = threading.Thread(target=run_seed, daemon=True)
     thread.start()
@@ -1977,7 +1983,7 @@ async def seed_meeting(meeting_key: int):
         s_resp = requests.get(s_url)
         if s_resp.status_code == 200:
             sessions = s_resp.json()
-            set_cached_data(f"f1_sessions_m{meeting_key}_sNone", sessions, ttl=604800)
+            set_cached_data(f"f1_sessions_m{meeting_key}_sNone", sessions, ttl=None)
                     
     thread = threading.Thread(target=run_seed, daemon=True)
     thread.start()
@@ -2009,8 +2015,8 @@ async def seed_session(session_key: int, data_type: str = None):
             url = f"{OPENF1_BASE_URL}/{dtype}?session_key={session_key}"
             resp = requests.get(url)
             if resp.status_code == 200:
-                # Use a long TTL for historical data
-                set_cached_data(f"f1_{dtype}_sk{session_key}", resp.json(), ttl=604800)
+                # Use None for permanent historical data
+                set_cached_data(f"f1_{dtype}_sk{session_key}", resp.json(), ttl=None)
             time.sleep(0.5)
             
     thread = threading.Thread(target=run_seed, daemon=True)
