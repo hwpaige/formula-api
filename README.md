@@ -61,6 +61,7 @@ Proxies various dynamic data types for a specific session.
     - `stints`: Tire stint information.
     - `intervals`: Gaps between drivers.
     - `pit`: Pit stop information.
+    - `team_radio`: Transcripts and audio links to team radio.
 - **Parameters:**
     - `session_key`: (required, int) Unique identifier for the session.
     - `date_gt`: (optional, string) ISO8601 timestamp to fetch data since a specific time (incremental updates).

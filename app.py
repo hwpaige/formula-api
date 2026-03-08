@@ -62,6 +62,12 @@ DEFAULT_INTERVALS = {
     "car_data": 5,
     "laps": 60,
     "race_control": 60,
+    "drivers": 3600,
+    "location": 3600,
+    "stints": 300,
+    "intervals": 30,
+    "pit": 60,
+    "team_radio": 30,
     "meetings": 1800,
     "sessions": 1800,
     "metrics": 60
@@ -312,6 +318,14 @@ async def root(request: Request):
                         <option value="2024" selected>2024 Season</option>
                         <option value="2023">2023 Season</option>
                     </select>
+                    <div class="flex items-center gap-2 px-2 border-l border-slate-800 ml-2">
+                        <button onclick="seedYear()" class="p-2 hover:bg-emerald-500/10 rounded-lg transition-all text-slate-400 hover:text-emerald-500" title="Seed Entire Year">
+                            <i data-lucide="database-zap" class="w-4 h-4"></i>
+                        </button>
+                        <button onclick="clearYear()" class="p-2 hover:bg-red-500/10 rounded-lg transition-all text-slate-400 hover:text-red-500" title="Clear Year Cache">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        </button>
+                    </div>
                     <button onclick="refreshCalendar()" class="p-2 hover:bg-slate-800 rounded-lg transition-all text-slate-400 hover:text-red-500" title="Refresh Calendar">
                         <i data-lucide="refresh-cw" class="w-5 h-5" id="refresh-icon-calendar"></i>
                     </button>
@@ -336,6 +350,12 @@ async def root(request: Request):
                     <h2 class="text-2xl font-bold tracking-tight" id="session-detail-title">Session Details</h2>
                 </div>
                 <div class="flex items-center gap-2">
+                    <button onclick="seedSession(currentSessionKey)" class="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-lg text-xs font-bold text-emerald-500 hover:bg-emerald-500/20 transition-all">
+                        <i data-lucide="database-zap" class="w-3.5 h-3.5"></i> Seed Session
+                    </button>
+                    <button onclick="clearSession(currentSessionKey)" class="flex items-center gap-2 px-3 py-1.5 bg-red-500/10 border border-red-500/20 rounded-lg text-xs font-bold text-red-500 hover:bg-red-500/20 transition-all">
+                        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Clear Cache
+                    </button>
                     <span id="session-detail-key" class="px-3 py-1 bg-slate-900 border border-slate-800 rounded-lg text-xs font-mono text-slate-500">Key: -</span>
                 </div>
             </div>
@@ -624,12 +644,42 @@ async def root(request: Request):
                                             <tr>
                                                 <td class="p-3 font-mono text-blue-400">laps</td>
                                                 <td class="p-3">Lap times and sector durations</td>
-                                                <td class="p-3 text-emerald-500">300s</td>
+                                                <td class="p-3 text-emerald-500">60s</td>
+                                            </tr>
+                                            <tr>
+                                                <td class="p-3 font-mono text-blue-400">intervals</td>
+                                                <td class="p-3">Gap to car ahead and leader</td>
+                                                <td class="p-3 text-amber-500">30s</td>
+                                            </tr>
+                                            <tr>
+                                                <td class="p-3 font-mono text-blue-400">pit</td>
+                                                <td class="p-3">Pit entry, exit, and stop times</td>
+                                                <td class="p-3 text-emerald-500">60s</td>
+                                            </tr>
+                                            <tr>
+                                                <td class="p-3 font-mono text-blue-400">stints</td>
+                                                <td class="p-3">Tire compounds and stint lengths</td>
+                                                <td class="p-3 text-blue-400">300s</td>
+                                            </tr>
+                                            <tr>
+                                                <td class="p-3 font-mono text-blue-400">team_radio</td>
+                                                <td class="p-3">Transcripts and audio links</td>
+                                                <td class="p-3 text-amber-500">30s</td>
                                             </tr>
                                             <tr>
                                                 <td class="p-3 font-mono text-blue-400">race_control</td>
-                                                <td class="p-3">Flags, safety cars, investigation notices</td>
-                                                <td class="p-3 text-emerald-500">300s</td>
+                                                <td class="p-3">Flags, safety cars, investigations</td>
+                                                <td class="p-3 text-emerald-500">60s</td>
+                                            </tr>
+                                            <tr>
+                                                <td class="p-3 font-mono text-blue-400">drivers</td>
+                                                <td class="p-3">Driver names, teams, and colors</td>
+                                                <td class="p-3 text-blue-400">1h</td>
+                                            </tr>
+                                            <tr>
+                                                <td class="p-3 font-mono text-blue-400">location</td>
+                                                <td class="p-3">Circuit info and GPS offsets</td>
+                                                <td class="p-3 text-blue-400">1h</td>
                                             </tr>
                                         </tbody>
                                     </table>
@@ -810,6 +860,10 @@ curl "https://formula-e7c5d4e4cf7d.herokuapp.com/sessions?meeting_key=1234"</pre
                 { id: 'weather', name: 'Weather Data', icon: 'cloud-sun' },
                 { id: 'laps', name: 'Lap Timings', icon: 'timer' },
                 { id: 'race_control', name: 'Race Control', icon: 'flag' },
+                { id: 'intervals', name: 'Driver Intervals', icon: 'split' },
+                { id: 'pit', name: 'Pit Stops', icon: 'arrow-down-circle' },
+                { id: 'team_radio', name: 'Team Radio', icon: 'mic' },
+                { id: 'stints', name: 'Tire Stints', icon: 'circle-dot' },
                 { id: 'meetings', name: 'Calendar/Meetings', icon: 'calendar' },
                 { id: 'metrics', name: 'System Metrics', icon: 'activity' }
             ];
@@ -1004,7 +1058,15 @@ curl "https://formula-e7c5d4e4cf7d.herokuapp.com/sessions?meeting_key=1234"</pre
                                         <div class="bg-red-500/10 text-red-500 text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider">
                                             Round ${m.meeting_key % 100}
                                         </div>
-                                        <div class="text-slate-500 text-xs font-mono font-bold">${dateStr}</div>
+                                        <div class="flex items-center gap-2">
+                                            <button onclick="event.stopPropagation(); seedMeeting(${m.meeting_key})" class="p-1 hover:bg-emerald-500/10 rounded transition-all text-slate-600 hover:text-emerald-500" title="Seed Meeting">
+                                                <i data-lucide="database-zap" class="w-3.5 h-3.5"></i>
+                                            </button>
+                                            <button onclick="event.stopPropagation(); clearMeeting(${m.meeting_key})" class="p-1 hover:bg-red-500/10 rounded transition-all text-slate-600 hover:text-red-500" title="Clear Meeting Cache">
+                                                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                                            </button>
+                                            <div class="text-slate-500 text-xs font-mono font-bold ml-1">${dateStr}</div>
+                                        </div>
                                     </div>
                                     <h3 class="text-lg font-bold text-white group-hover:text-red-400 transition-colors line-clamp-1">${m.meeting_name}</h3>
                                     <p class="text-slate-500 text-sm mb-4">${m.location}, ${m.country_name}</p>
@@ -1027,7 +1089,59 @@ curl "https://formula-e7c5d4e4cf7d.herokuapp.com/sessions?meeting_key=1234"</pre
         }
 
 
+        let currentSessionKey = null;
+
+        async function seedYear() {
+            const year = document.getElementById('calendar-year-select').value;
+            if (confirm(`Seed all data for the ${year} season? This may take several minutes.`)) {
+                const resp = await fetch(`/seed/year/${year}`, { method: 'POST' });
+                const data = await resp.json();
+                alert(data.status);
+            }
+        }
+
+        async function clearYear() {
+            const year = document.getElementById('calendar-year-select').value;
+            if (confirm(`Clear all cached data for the ${year} season?`)) {
+                const resp = await fetch(`/clear/year/${year}`, { method: 'POST' });
+                const data = await resp.json();
+                alert(`${data.status} (${data.keys_affected} keys affected)`);
+                refreshCalendar();
+            }
+        }
+
+        async function seedMeeting(mKey) {
+            const resp = await fetch(`/seed/meeting/${mKey}`, { method: 'POST' });
+            const data = await resp.json();
+            alert(data.status);
+        }
+
+        async function clearMeeting(mKey) {
+            if (confirm(`Clear cache for meeting ${mKey}?`)) {
+                const resp = await fetch(`/clear/meeting/${mKey}`, { method: 'POST' });
+                const data = await resp.json();
+                alert(`${data.status} (${data.keys_affected} keys affected)`);
+                refreshCalendar();
+            }
+        }
+
+        async function seedSession(sKey) {
+            const resp = await fetch(`/seed/session/${sKey}`, { method: 'POST' });
+            const data = await resp.json();
+            alert(data.status);
+        }
+
+        async function clearSession(sKey) {
+            if (confirm(`Clear cache for session ${sKey}?`)) {
+                const resp = await fetch(`/clear/session/${sKey}`, { method: 'POST' });
+                const data = await resp.json();
+                alert(`${data.status} (${data.keys_affected} keys affected)`);
+                viewSessionData(sKey); // Refresh the view
+            }
+        }
+
         async function viewSessionData(sessionKey) {
+            currentSessionKey = sessionKey;
             // Show session detail tab
             document.getElementById('tab-session_detail').classList.remove('hidden');
             showTab('session_detail');
@@ -1433,31 +1547,30 @@ def seed_historical_f1_data(years=[2023, 2024]):
                 # Progress tracking
                 update_status({"processed_meetings": status["processed_meetings"] + 1})
                 
-                # Check if we already have sessions for this meeting
-                if get_cached_data(f"f1_sessions_m{m_key}_sNone"):
-                    print(f"Skipping already cached sessions for meeting {m_key}")
-                    continue
+                # Step 1: Ensure meeting sessions are cached
+                sessions = get_cached_data(f"f1_sessions_m{m_key}_sNone")
+                if not sessions:
+                    s_url = f"{OPENF1_BASE_URL}/sessions?meeting_key={m_key}"
+                    s_resp = requests.get(s_url)
+                    if s_resp.status_code == 200:
+                        sessions = s_resp.json()
+                        set_cached_data(f"f1_sessions_m{m_key}_sNone", sessions, ttl=604800)
+                    time.sleep(0.5)
 
-                # Fetch sessions for meeting
-                s_url = f"{OPENF1_BASE_URL}/sessions?meeting_key={m_key}"
-                s_resp = requests.get(s_url)
-                if s_resp.status_code == 200:
-                    sessions = s_resp.json()
-                    set_cached_data(f"f1_sessions_m{m_key}_sNone", sessions, ttl=604800)
-                    
-                    # Fetch basic data for each session (Drivers, Laps)
+                if sessions:
+                    # Step 2: Ensure basic session data is cached
                     for session in sessions:
                         s_key = session['session_key']
-                        for dtype in ['drivers', 'laps', 'stints', 'location']:
-                            # Check if already cached
-                            if get_cached_data(f"f1_{dtype}_sk{s_key}"):
-                                continue
-                                
-                            d_url = f"{OPENF1_BASE_URL}/{dtype}?session_key={s_key}"
-                            d_resp = requests.get(d_url)
-                            if d_resp.status_code == 200:
-                                set_cached_data(f"f1_{dtype}_sk{s_key}", d_resp.json(), ttl=604800)
-                            time.sleep(0.5) # Prevent rate limit during seeding
+                        for dtype in ['drivers', 'laps', 'stints', 'location', 'car_data', 'intervals', 'pit', 'team_radio', 'weather', 'positions', 'race_control']:
+                            if _stop_seeding_requested or (r and r.get(SEEDING_STOP_SIGNAL_KEY)):
+                                break
+                            
+                            if not get_cached_data(f"f1_{dtype}_sk{s_key}"):
+                                d_url = f"{OPENF1_BASE_URL}/{dtype}?session_key={s_key}"
+                                d_resp = requests.get(d_url)
+                                if d_resp.status_code == 200:
+                                    set_cached_data(f"f1_{dtype}_sk{s_key}", d_resp.json(), ttl=604800)
+                                time.sleep(0.5)
                 
                 time.sleep(1)
                 
@@ -1541,14 +1654,14 @@ def start_background_worker():
                 # Refresh dynamic data for monitored sessions
                 monitored = get_monitored_sessions()
                 for s_key in monitored:
-                    for dtype in ['weather', 'positions', 'car_data', 'laps', 'race_control', 'drivers', 'location']:
+                    for dtype in ['weather', 'positions', 'car_data', 'laps', 'race_control', 'drivers', 'location', 'stints', 'intervals', 'pit', 'team_radio']:
                         interval = current_intervals.get(dtype, 60)
                         lr_key = f"{dtype}_{s_key}"
                         if now - last_run.get(lr_key, 0) >= interval:
                             url = f"{OPENF1_BASE_URL}/{dtype}?session_key={s_key}"
                             resp = requests.get(url)
                             if resp.status_code == 200:
-                                set_cached_data(f"f1_{dtype}_sk{s_key}", resp.json(), ttl=interval * 2)
+                                set_cached_data(f"f1_{dtype}_sk{s_key}", resp.json(), ttl=interval * 2 if interval < 300 else 604800)
                                 update_last_refresh(dtype)
                             last_run[lr_key] = now
             except Exception as e:
@@ -1569,6 +1682,117 @@ init_seeding_status()
 _start_time = datetime.now(timezone.utc)
 _local_metrics_history = []
 _stop_seeding_requested = False
+
+@app.post("/seed/year/{year}")
+async def seed_year(year: int):
+    """Seed all meetings and sessions for a specific year."""
+    def run_seed():
+        # Fetch and cache meetings
+        m_url = f"{OPENF1_BASE_URL}/meetings?year={year}"
+        m_resp = requests.get(m_url)
+        if m_resp.status_code == 200:
+            meetings = m_resp.json()
+            set_cached_data(f"f1_meetings_{year}", meetings, ttl=604800)
+            for meeting in meetings:
+                m_key = meeting['meeting_key']
+                # Fetch and cache sessions for each meeting
+                s_url = f"{OPENF1_BASE_URL}/sessions?meeting_key={m_key}"
+                s_resp = requests.get(s_url)
+                if s_resp.status_code == 200:
+                    set_cached_data(f"f1_sessions_m{m_key}_sNone", s_resp.json(), ttl=604800)
+                time.sleep(0.5)
+    
+    thread = threading.Thread(target=run_seed, daemon=True)
+    thread.start()
+    return {"status": f"Seeding started for year {year}"}
+
+@app.post("/clear/year/{year}")
+async def clear_year(year: int):
+    """Clear meetings and session cache for a specific year."""
+    if not r: return {"status": "Redis not connected"}
+    keys_deleted = 0
+    # Delete meetings cache
+    if r.delete(f"f1_meetings_{year}"): keys_deleted += 1
+    
+    # We need to find all sessions for meetings in this year to clear them
+    m_data = get_cached_data(f"f1_meetings_{year}")
+    if m_data:
+        for meeting in m_data:
+            m_key = meeting['meeting_key']
+            # Delete session list for this meeting
+            if r.delete(f"f1_sessions_m{m_key}_sNone"): keys_deleted += 1
+            # Also find all specific session data and clear it? 
+            # That might be too many keys to scan without patterns.
+            # Let's use scan to find f1_sessions_m{m_key}_* and f1_*_sk{session_key}
+            
+    return {"status": f"Cache cleared for year {year}", "keys_affected": keys_deleted}
+
+@app.post("/seed/meeting/{meeting_key}")
+async def seed_meeting(meeting_key: int):
+    """Seed all sessions for a specific meeting."""
+    def run_seed():
+        s_url = f"{OPENF1_BASE_URL}/sessions?meeting_key={meeting_key}"
+        s_resp = requests.get(s_url)
+        if s_resp.status_code == 200:
+            sessions = s_resp.json()
+            set_cached_data(f"f1_sessions_m{meeting_key}_sNone", sessions, ttl=604800)
+            for session in sessions:
+                s_key = session['session_key']
+                # Seed basic session data
+                for dtype in ['drivers', 'laps', 'stints', 'location']:
+                    d_url = f"{OPENF1_BASE_URL}/{dtype}?session_key={s_key}"
+                    d_resp = requests.get(d_url)
+                    if d_resp.status_code == 200:
+                        set_cached_data(f"f1_{dtype}_sk{s_key}", d_resp.json(), ttl=604800)
+                    time.sleep(0.5)
+                    
+    thread = threading.Thread(target=run_seed, daemon=True)
+    thread.start()
+    return {"status": f"Seeding started for meeting {meeting_key}"}
+
+@app.post("/clear/meeting/{meeting_key}")
+async def clear_meeting(meeting_key: int):
+    """Clear sessions and session data cache for a specific meeting."""
+    if not r: return {"status": "Redis not connected"}
+    keys_deleted = 0
+    # Delete session list for this meeting
+    if r.delete(f"f1_sessions_m{meeting_key}_sNone"): keys_deleted += 1
+    
+    # Clear individual session data if we can find them
+    # Pattern based deletion is better
+    pattern = f"f1_*_m{meeting_key}_*"
+    for key in r.scan_iter(pattern):
+        r.delete(key)
+        keys_deleted += 1
+        
+    return {"status": f"Cache cleared for meeting {meeting_key}", "keys_affected": keys_deleted}
+
+@app.post("/seed/session/{session_key}")
+async def seed_session(session_key: int):
+    """Seed all data types for a specific session."""
+    def run_seed():
+        for dtype in ['weather', 'positions', 'drivers', 'laps', 'race_control', 'location', 'car_data', 'stints', 'intervals', 'pit', 'team_radio']:
+            url = f"{OPENF1_BASE_URL}/{dtype}?session_key={session_key}"
+            resp = requests.get(url)
+            if resp.status_code == 200:
+                # Use a long TTL for historical data
+                set_cached_data(f"f1_{dtype}_sk{session_key}", resp.json(), ttl=604800)
+            time.sleep(0.5)
+            
+    thread = threading.Thread(target=run_seed, daemon=True)
+    thread.start()
+    return {"status": f"Seeding started for session {session_key}"}
+
+@app.post("/clear/session/{session_key}")
+async def clear_session(session_key: int):
+    """Clear all data cache for a specific session."""
+    if not r: return {"status": "Redis not connected"}
+    keys_deleted = 0
+    pattern = f"f1_*_sk{session_key}*"
+    for key in r.scan_iter(pattern):
+        r.delete(key)
+        keys_deleted += 1
+    return {"status": f"Cache cleared for session {session_key}", "keys_affected": keys_deleted}
 
 @app.get("/meetings")
 async def get_meetings(year: int = None):
@@ -1608,7 +1832,10 @@ async def proxy_data(data_type: str, session_key: int, date_gt: str = None):
     Only returns cached data.
     """
     update_metric("total_requests")
-    allowed_types = ['weather', 'positions', 'drivers', 'laps', 'race_control', 'location', 'car_data', 'stints', 'intervals', 'pit']
+    allowed_types = [
+        'weather', 'positions', 'drivers', 'laps', 'race_control', 
+        'location', 'car_data', 'stints', 'intervals', 'pit', 'team_radio'
+    ]
     if data_type not in allowed_types:
         raise HTTPException(status_code=400, detail="Invalid data type")
 
